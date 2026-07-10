@@ -29,7 +29,8 @@ final class APIClient {
     var onUnauthorized: (() async -> String?)?
 
     static let live = APIClient(
-        baseURL: URL(string: "http://localhost:8080")!,
+//        baseURL: URL(string: "http://localhost:8080")!,
+        baseURL: URL(string: "https://plantgram.janssen.tech")!,
         urlSession: .shared
     )
 
