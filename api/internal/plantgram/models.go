@@ -181,7 +181,7 @@ func (a *App) loadStringList(ctx context.Context, query string, args ...any) ([]
 		return nil, err
 	}
 	defer rows.Close()
-	var out []string
+	out := []string{}
 	for rows.Next() {
 		var v string
 		if err := rows.Scan(&v); err != nil {
@@ -198,7 +198,7 @@ func (a *App) loadReactions(ctx context.Context, postID string) ([]reaction, err
 		return nil, err
 	}
 	defer rows.Close()
-	var out []reaction
+	out := []reaction{}
 	for rows.Next() {
 		var r reaction
 		if err := rows.Scan(&r.Emoji, &r.Count); err != nil {

@@ -47,6 +47,13 @@ final class SessionStore: ObservableObject {
         return false
     }
 
+    var activeHousehold: Household? {
+        if case .active(let household) = householdState {
+            return household
+        }
+        return nil
+    }
+
     func restore() async {
         guard authState == .checking else { return }
         accessToken = KeychainStore.string(for: .accessToken)

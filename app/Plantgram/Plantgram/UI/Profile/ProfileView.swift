@@ -29,6 +29,36 @@ struct ProfileView: View {
                 .padding(.vertical, 8)
             }
 
+            Section("Household") {
+                if let household = sessionStore.activeHousehold {
+                    HStack(spacing: 12) {
+                        Image(systemName: "house.fill")
+                            .foregroundStyle(.green)
+                            .frame(width: 28)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(household.name)
+                                .font(.headline)
+                            if let role = household.role, !role.isEmpty {
+                                Text(role.capitalized)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                } else if sessionStore.householdState == .checking {
+                    HStack {
+                        ProgressView()
+                        Text("Loading household")
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Label("No household selected", systemImage: "house")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Section {
                 Button(role: .destructive) {
                     sessionStore.signOut()

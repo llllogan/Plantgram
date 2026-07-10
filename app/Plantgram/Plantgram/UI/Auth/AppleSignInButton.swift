@@ -16,7 +16,7 @@ struct AppleSignInButton: View {
                 await sessionStore.signInWithApple(result, rawNonce: currentNonce)
             }
         }
-        .signInWithAppleButtonStyle(.black)
+        .signInWithAppleButtonStyle(.whiteOutline)
         .disabled(sessionStore.isAuthenticating)
     }
 }

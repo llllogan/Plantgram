@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"mime"
 	"net/http"
 	"net/url"
@@ -139,13 +140,45 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("PATCH /comments/{id}", a.requireAuth(a.handleUpdateComment, true))
 	mux.HandleFunc("DELETE /comments/{id}", a.requireAuth(a.handleDeleteComment, true))
 
-	return withCommonHeaders(mux)
+	return logRequests(withCommonHeaders(mux))
 }
 
 func withCommonHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		next.ServeHTTP(w, r)
+	})
+}
+
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (w *loggingResponseWriter) WriteHeader(statusCode int) {
+	if w.statusCode != 0 {
+		return
+	}
+	w.statusCode = statusCode
+	w.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (w *loggingResponseWriter) Write(data []byte) (int, error) {
+	if w.statusCode == 0 {
+		w.statusCode = http.StatusOK
+	}
+	return w.ResponseWriter.Write(data)
+}
+
+func logRequests(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		lw := &loggingResponseWriter{ResponseWriter: w}
+		next.ServeHTTP(lw, r)
+		if lw.statusCode == 0 {
+			lw.statusCode = http.StatusOK
+		}
+		log.Printf("%s %s %d %s %s", r.Method, r.URL.RequestURI(), lw.statusCode, time.Since(start).Round(time.Millisecond), r.RemoteAddr)
 	})
 }
 
@@ -461,7 +494,7 @@ func (a *App) handleListPlants(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer rows.Close()
-	var plants []plant
+	plants := []plant{}
 	for rows.Next() {
 		var p plant
 		if err := rows.Scan(&p.ID, &p.ActorID, &p.Name, &p.Species, &p.Notes, &p.ProfileMediaID, &p.CreatedAt); err != nil {
@@ -810,7 +843,7 @@ func (a *App) writePostList(w http.ResponseWriter, r *http.Request, query string
 		return
 	}
 	defer rows.Close()
-	var ids []string
+	ids := []string{}
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
@@ -825,7 +858,7 @@ func (a *App) writePostList(w http.ResponseWriter, r *http.Request, query string
 	}
 	rows.Close()
 
-	var posts []post
+	posts := []post{}
 	for _, id := range ids {
 		p, err := a.loadPost(r.Context(), id, ac.HouseholdID)
 		if err != nil {

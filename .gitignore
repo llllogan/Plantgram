@@ -1,4 +1,5 @@
 /api/data
+/api/media
 
 # Xcode user/local state
 *.xcuserstate

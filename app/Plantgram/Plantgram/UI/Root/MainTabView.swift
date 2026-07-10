@@ -2,11 +2,12 @@ import SwiftUI
 
 struct MainTabView: View {
     @State private var isPresentingComposer = false
+    @State private var feedRefreshID = 0
 
     var body: some View {
         TabView {
             NavigationStack {
-                FeedView()
+                FeedView(refreshID: feedRefreshID)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
                             Button {
@@ -20,6 +21,13 @@ struct MainTabView: View {
             }
             .tabItem {
                 Label("Feed", systemImage: "leaf")
+            }
+
+            NavigationStack {
+                GardenView()
+            }
+            .tabItem {
+                Label("Garden", systemImage: "camera.macro")
             }
 
             NavigationStack {
@@ -39,7 +47,9 @@ struct MainTabView: View {
                 Label("Profile", systemImage: "person.crop.circle")
             }
         }
-        .sheet(isPresented: $isPresentingComposer) {
+        .sheet(isPresented: $isPresentingComposer, onDismiss: {
+            feedRefreshID += 1
+        }) {
             CreatePostView()
         }
     }
