@@ -82,6 +82,10 @@ func TestCorePlantgramFlow(t *testing.T) {
 	if feedPost["id"] != postID || int(feedPost["comment_count"].(float64)) != 1 {
 		t.Fatalf("unexpected feed post: %#v", feedPost)
 	}
+	reactions := feedPost["reactions"].([]any)
+	if len(reactions) != 1 || reactions[0].(map[string]any)["mine"] != true {
+		t.Fatalf("reaction was not marked as mine: %#v", reactions)
+	}
 
 	timelineResp := doJSON(t, handler, http.MethodGet, "/plants/"+plantID+"/timeline", token, nil)
 	timelinePosts := timelineResp["posts"].([]any)

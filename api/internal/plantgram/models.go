@@ -144,7 +144,7 @@ func (a *App) getPlant(ctx context.Context, id, householdID string) (plant, bool
 	return p, err == nil
 }
 
-func (a *App) loadPost(ctx context.Context, id, householdID string) (post, error) {
+func (a *App) loadPost(ctx context.Context, id, householdID, humanID string) (post, error) {
 	var p post
 	var authorID string
 	err := a.db.QueryRowContext(ctx, `
@@ -167,7 +167,7 @@ WHERE p.id = ? AND p.household_id = ?`, id, householdID).Scan(&p.ID, &p.Househol
 	if err != nil {
 		return p, err
 	}
-	p.Reactions, err = a.loadReactions(ctx, p.ID)
+	p.Reactions, err = a.loadReactions(ctx, p.ID, humanID)
 	if err != nil {
 		return p, err
 	}
@@ -192,8 +192,13 @@ func (a *App) loadStringList(ctx context.Context, query string, args ...any) ([]
 	return out, rows.Err()
 }
 
-func (a *App) loadReactions(ctx context.Context, postID string) ([]reaction, error) {
-	rows, err := a.db.QueryContext(ctx, `SELECT emoji, COUNT(*) FROM post_reactions WHERE post_id = ? GROUP BY emoji ORDER BY emoji`, postID)
+func (a *App) loadReactions(ctx context.Context, postID, humanID string) ([]reaction, error) {
+	rows, err := a.db.QueryContext(ctx, `
+SELECT emoji, COUNT(*), MAX(CASE WHEN human_id = ? THEN 1 ELSE 0 END)
+FROM post_reactions
+WHERE post_id = ?
+GROUP BY emoji
+ORDER BY emoji`, humanID, postID)
 	if err != nil {
 		return nil, err
 	}
@@ -201,9 +206,11 @@ func (a *App) loadReactions(ctx context.Context, postID string) ([]reaction, err
 	out := []reaction{}
 	for rows.Next() {
 		var r reaction
-		if err := rows.Scan(&r.Emoji, &r.Count); err != nil {
+		var mine int
+		if err := rows.Scan(&r.Emoji, &r.Count, &mine); err != nil {
 			return nil, err
 		}
+		r.Mine = mine == 1
 		out = append(out, r)
 	}
 	return out, rows.Err()

@@ -108,12 +108,51 @@ struct FeedActor: Decodable {
     let displayName: String
 }
 
-struct PostReaction: Decodable, Identifiable {
+struct PostReaction: Decodable, Identifiable, Equatable {
     let emoji: String
     let count: Int
     let mine: Bool
 
     var id: String { emoji }
+}
+
+struct PostComment: Decodable, Identifiable, Equatable {
+    let id: String
+    let postId: String
+    let humanId: String
+    let body: String
+    let createdAt: String
+    let updatedAt: String
+}
+
+struct PostCommentsResponse: Decodable {
+    let comments: [PostComment]
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        comments = try container.decodeIfPresent([PostComment].self, forKey: .comments) ?? []
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case comments
+    }
+}
+
+struct AddReactionRequest: Encodable {
+    let emoji: String
+}
+
+struct AddReactionResponse: Decodable {
+    let postId: String
+    let emoji: String
+}
+
+struct CreateCommentRequest: Encodable {
+    let body: String
+}
+
+struct CreateCommentResponse: Decodable {
+    let comment: PostComment
 }
 
 struct CreatePostRequest: Encodable {

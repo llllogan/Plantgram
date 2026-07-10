@@ -791,7 +791,7 @@ func (a *App) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "create post failed")
 		return
 	}
-	post, err := a.loadPost(r.Context(), id, ac.HouseholdID)
+	post, err := a.loadPost(r.Context(), id, ac.HouseholdID, ac.HumanID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "load post failed")
 		return
@@ -807,7 +807,7 @@ func (a *App) handleFeed(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) handleGetPost(w http.ResponseWriter, r *http.Request) {
 	ac := authFrom(r)
-	post, err := a.loadPost(r.Context(), r.PathValue("id"), ac.HouseholdID)
+	post, err := a.loadPost(r.Context(), r.PathValue("id"), ac.HouseholdID, ac.HumanID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "post not found")
 		return
@@ -860,7 +860,7 @@ func (a *App) writePostList(w http.ResponseWriter, r *http.Request, query string
 
 	posts := []post{}
 	for _, id := range ids {
-		p, err := a.loadPost(r.Context(), id, ac.HouseholdID)
+		p, err := a.loadPost(r.Context(), id, ac.HouseholdID, ac.HumanID)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "load post failed")
 			return

@@ -51,6 +51,11 @@ final class APIClient {
         return try await send(request)
     }
 
+    func delete(_ path: String, accessToken: String? = nil) async throws {
+        let request = try makeRequest(path: path, method: "DELETE", accessToken: accessToken)
+        try await sendWithoutBody(request)
+    }
+
     func uploadImage(_ data: Data, fileName: String, mimeType: String, accessToken: String) async throws -> MediaUploadResponse {
         let boundary = "Boundary-\(UUID().uuidString)"
         var request = try makeRequest(path: "/media", method: "POST", accessToken: accessToken)
@@ -101,6 +106,31 @@ final class APIClient {
             throw APIError.server("Request failed with status \(httpResponse.statusCode).")
         }
         return try decoder.decode(Response.self, from: data)
+    }
+
+    private func sendWithoutBody(_ request: URLRequest) async throws {
+        let (_, response) = try await urlSession.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            if httpResponse.statusCode == 401, let newToken = await performRefresh() {
+                var retryRequest = request
+                retryRequest.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization")
+                let (_, retryResponse) = try await urlSession.data(for: retryRequest)
+                guard let retryHTTPResponse = retryResponse as? HTTPURLResponse else {
+                    throw APIError.invalidResponse
+                }
+                guard (200..<300).contains(retryHTTPResponse.statusCode) else {
+                    throw APIError.server("Request failed with status \(retryHTTPResponse.statusCode).")
+                }
+                return
+            }
+            if httpResponse.statusCode == 401 {
+                throw APIError.unauthorized
+            }
+            throw APIError.server("Request failed with status \(httpResponse.statusCode).")
+        }
     }
 
     private var refreshTask: Task<String?, Never>?
