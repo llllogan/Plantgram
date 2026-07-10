@@ -178,6 +178,48 @@ struct MediaAsset: Decodable {
     let url: String
 }
 
+extension String {
+    /// A reaction is one user-perceived emoji, which may contain several Unicode scalars
+    /// (for example a flag, skin tone, or family emoji joined with ZWJ characters).
+    var isSingleEmojiReaction: Bool {
+        let value = trimmingCharacters(in: .whitespacesAndNewlines)
+        guard value.count == 1, let character = value.first else {
+            return false
+        }
+
+        let scalars = Array(character.unicodeScalars)
+        let hasEmojiScalar = scalars.contains { $0.properties.isEmoji }
+        guard hasEmojiScalar else {
+            return false
+        }
+
+        let hasEmojiPresentation = scalars.contains { $0.properties.isEmojiPresentation }
+        let hasVariationSelector = scalars.contains { $0.value == 0xFE0F }
+        let isTextDefaultEmojiSymbol = scalars.count == 1 && character.isSymbol
+
+        // Some symbols, such as a heart, are valid emoji without an explicit
+        // presentation selector. Digits alone are intentionally excluded.
+        guard hasEmojiPresentation || hasVariationSelector || isTextDefaultEmojiSymbol else {
+            return false
+        }
+
+        return scalars.allSatisfy { scalar in
+            let properties = scalar.properties
+            let isVariationSelector = scalar.value == 0xFE0E || scalar.value == 0xFE0F
+            let isJoinControl = scalar.value == 0x200C || scalar.value == 0x200D
+            let isEmojiTag = (0xE0020...0xE007F).contains(scalar.value)
+
+            return properties.isEmoji
+                || properties.isEmojiPresentation
+                || properties.isEmojiModifier
+                || properties.isGraphemeExtend
+                || isVariationSelector
+                || isJoinControl
+                || isEmojiTag
+        }
+    }
+}
+
 extension FeedPost {
     static let preview = FeedPost(
         id: "pst_preview",

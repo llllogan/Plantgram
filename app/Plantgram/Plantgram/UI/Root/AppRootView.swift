@@ -14,6 +14,7 @@ struct AppRootView: View {
                 MainTabView()
             }
         }
+        .dismissKeyboardOnTap()
         .sheet(
             isPresented: Binding(
                 get: { sessionStore.shouldShowHouseholdOnboarding },

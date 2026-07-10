@@ -883,8 +883,8 @@ func (a *App) handleAddReaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Emoji = strings.TrimSpace(req.Emoji)
-	if req.Emoji == "" || len([]rune(req.Emoji)) > 8 {
-		writeError(w, http.StatusBadRequest, "emoji is required")
+	if !isEmojiReaction(req.Emoji) {
+		writeError(w, http.StatusBadRequest, "enter one emoji")
 		return
 	}
 	if !a.postInHousehold(r.Context(), r.PathValue("id"), ac.HouseholdID) {
@@ -896,6 +896,83 @@ func (a *App) handleAddReaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"post_id": r.PathValue("id"), "emoji": req.Emoji})
+}
+
+func isEmojiReaction(value string) bool {
+	runes := []rune(value)
+	if len(runes) == 0 || len(runes) > 64 {
+		return false
+	}
+
+	baseCount := 0
+	hasJoiner := false
+	hasKeycap := false
+	allRegionalIndicators := true
+
+	for _, r := range runes {
+		switch {
+		case isEmojiModifier(r), isVariationSelector(r), isEmojiTag(r):
+			continue
+		case r == 0x200C || r == 0x200D:
+			hasJoiner = true
+			continue
+		case r == 0x20E3:
+			hasKeycap = true
+			continue
+		case isKeycapBase(r):
+			allRegionalIndicators = false
+			continue
+		case isEmojiBase(r):
+			baseCount++
+			if r < 0x1F1E6 || r > 0x1F1FF {
+				allRegionalIndicators = false
+			}
+		default:
+			return false
+		}
+	}
+
+	if hasKeycap {
+		return baseCount == 0 && len(runes) >= 2
+	}
+	if baseCount == 0 {
+		return false
+	}
+	if hasJoiner {
+		return true
+	}
+	return baseCount == 1 || (baseCount == 2 && allRegionalIndicators)
+}
+
+func isEmojiBase(r rune) bool {
+	return (r >= 0x1F000 && r <= 0x1FAFF) ||
+		(r >= 0x2600 && r <= 0x27BF) ||
+		r == 0x00A9 || r == 0x00AE || r == 0x203C || r == 0x2049 ||
+		r == 0x2122 || r == 0x2139 || (r >= 0x2194 && r <= 0x2199) ||
+		(r >= 0x21A9 && r <= 0x21AA) || (r >= 0x231A && r <= 0x231B) ||
+		r == 0x2328 || r == 0x23CF || (r >= 0x23E9 && r <= 0x23F3) ||
+		(r >= 0x23F8 && r <= 0x23FA) || r == 0x24C2 ||
+		(r >= 0x25AA && r <= 0x25AB) || r == 0x25B6 || r == 0x25C0 ||
+		(r >= 0x25FB && r <= 0x25FE) || (r >= 0x2934 && r <= 0x2935) ||
+		(r >= 0x2B05 && r <= 0x2B07) || (r >= 0x2B1B && r <= 0x2B1C) ||
+		r == 0x2B50 || r == 0x2B55 || r == 0x3030 || r == 0x303D ||
+		r == 0x3297 || r == 0x3299
+}
+
+func isEmojiModifier(r rune) bool {
+	return r >= 0x1F3FB && r <= 0x1F3FF
+}
+
+func isVariationSelector(r rune) bool {
+	return r == 0xFE0E || r == 0xFE0F
+}
+
+func isEmojiTag(r rune) bool {
+	return r >= 0xE0020 && r <= 0xE007F
+}
+
+func isKeycapBase(r rune) bool {
+	return r == '#' || r == '*' || (r >= '0' && r <= '9')
 }
 
 func (a *App) handleDeleteReaction(w http.ResponseWriter, r *http.Request) {

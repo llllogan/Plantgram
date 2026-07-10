@@ -94,6 +94,29 @@ func TestCorePlantgramFlow(t *testing.T) {
 	}
 }
 
+func TestEmojiReactionValidation(t *testing.T) {
+	tests := []struct {
+		value string
+		valid bool
+	}{
+		{value: "😀", valid: true},
+		{value: "👍🏽", valid: true},
+		{value: "🇦🇺", valid: true},
+		{value: "👨‍👩‍👧‍👦", valid: true},
+		{value: "1️⃣", valid: true},
+		{value: "hello", valid: false},
+		{value: "😀😀", valid: false},
+		{value: "1", valid: false},
+		{value: "😀!", valid: false},
+	}
+
+	for _, test := range tests {
+		if got := isEmojiReaction(test.value); got != test.valid {
+			t.Errorf("isEmojiReaction(%q) = %v, want %v", test.value, got, test.valid)
+		}
+	}
+}
+
 func TestMigrationRemovesPasswordAuthColumns(t *testing.T) {
 	tmp := t.TempDir()
 	db, err := sql.Open("libsql", sqliteFileDSN(filepath.Join(tmp, "plantgram.db")))
