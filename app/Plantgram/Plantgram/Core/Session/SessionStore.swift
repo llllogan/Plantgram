@@ -34,6 +34,18 @@ final class SessionStore: ObservableObject {
         self.authService = authService
         self.accountService = accountService
         self.userDefaults = userDefaults
+        setupTokenRefresh()
+    }
+
+    private func setupTokenRefresh() {
+        APIClient.live.onUnauthorized = { [weak self] in
+            do {
+                return try await self?.refreshAccessToken()
+            } catch {
+                await MainActor.run { self?.signOut() }
+                return nil
+            }
+        }
     }
 
     var shouldShowHouseholdOnboarding: Bool {
@@ -152,6 +164,18 @@ final class SessionStore: ObservableObject {
         householdError = nil
         householdState = .unknown
         authState = .signedOut
+    }
+
+    func refreshAccessToken() async throws -> String? {
+        guard let refreshToken = KeychainStore.string(for: .refreshToken) else {
+            return nil
+        }
+        let householdID = activeHousehold?.id
+        let response = try await authService.refreshToken(refreshToken: refreshToken, householdId: householdID)
+        KeychainStore.save(response.accessToken, for: .accessToken)
+        KeychainStore.save(response.refreshToken, for: .refreshToken)
+        self.accessToken = response.accessToken
+        return response.accessToken
     }
 
     private func refreshAccountState() async {

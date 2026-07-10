@@ -67,3 +67,14 @@ struct ActiveHouseholdResponse: Decodable {
     let accessToken: String
     let tokenType: String
 }
+
+struct RefreshTokenRequest: Encodable {
+    let refreshToken: String
+    let householdId: String?
+}
+
+struct RefreshTokenResponse: Decodable {
+    let accessToken: String
+    let refreshToken: String
+    let tokenType: String
+}

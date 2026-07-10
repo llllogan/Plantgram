@@ -5,6 +5,7 @@ enum APIError: LocalizedError {
     case invalidResponse
     case message(String)
     case server(String)
+    case unauthorized
 
     var errorDescription: String? {
         switch self {
@@ -16,18 +17,26 @@ enum APIError: LocalizedError {
             message
         case .server(let message):
             message
+        case .unauthorized:
+            "Your session has expired. Please sign in again."
         }
     }
 }
 
-struct APIClient {
+final class APIClient {
     var baseURL: URL
     var urlSession: URLSession
+    var onUnauthorized: (() async -> String?)?
 
     static let live = APIClient(
         baseURL: URL(string: "http://localhost:8080")!,
         urlSession: .shared
     )
+
+    init(baseURL: URL, urlSession: URLSession) {
+        self.baseURL = baseURL
+        self.urlSession = urlSession
+    }
 
     func get<Response: Decodable>(_ path: String, accessToken: String? = nil) async throws -> Response {
         var request = try makeRequest(path: path, method: "GET", accessToken: accessToken)
@@ -68,12 +77,44 @@ struct APIClient {
             throw APIError.invalidResponse
         }
         guard (200..<300).contains(httpResponse.statusCode) else {
+            if httpResponse.statusCode == 401, let newToken = await performRefresh() {
+                var retryRequest = request
+                retryRequest.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization")
+                let (retryData, retryResponse) = try await urlSession.data(for: retryRequest)
+                guard let retryHTTPResponse = retryResponse as? HTTPURLResponse else {
+                    throw APIError.invalidResponse
+                }
+                guard (200..<300).contains(retryHTTPResponse.statusCode) else {
+                    if let errorResponse = try? decoder.decode(ErrorResponse.self, from: retryData) {
+                        throw APIError.server(errorResponse.error)
+                    }
+                    throw APIError.server("Request failed with status \(retryHTTPResponse.statusCode).")
+                }
+                return try decoder.decode(Response.self, from: retryData)
+            }
+            if httpResponse.statusCode == 401 {
+                throw APIError.unauthorized
+            }
             if let errorResponse = try? decoder.decode(ErrorResponse.self, from: data) {
                 throw APIError.server(errorResponse.error)
             }
             throw APIError.server("Request failed with status \(httpResponse.statusCode).")
         }
         return try decoder.decode(Response.self, from: data)
+    }
+
+    private var refreshTask: Task<String?, Never>?
+
+    private func performRefresh() async -> String? {
+        if let existingTask = refreshTask {
+            return await existingTask.value
+        }
+        let task = Task { [weak self] in
+            defer { self?.refreshTask = nil }
+            return await self?.onUnauthorized?()
+        }
+        refreshTask = task
+        return await task.value
     }
 
     private func multipartBody(data: Data, name: String, fileName: String, mimeType: String, boundary: String) -> Data {
