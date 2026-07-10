@@ -1,0 +1,10 @@
+data/
+media/
+*.db
+*.db-shm
+*.db-wal
+*.jfif
+*.jpg
+*.jpeg
+*.png
+*.webp

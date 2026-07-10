@@ -1,0 +1,28 @@
+services:
+  api:
+    image: ${PLANTGRAM_IMAGE:?PLANTGRAM_IMAGE is required}
+    restart: unless-stopped
+    ports:
+      - "${PLANTGRAM_PORT:-8080}:8080"
+    environment:
+      PLANTGRAM_ADDR: ${PLANTGRAM_ADDR:-:8080}
+      PLANTGRAM_DB_PATH: ${PLANTGRAM_DB_PATH:-/var/lib/plantgram/data/plantgram.db}
+      PLANTGRAM_MEDIA_DIR: ${PLANTGRAM_MEDIA_DIR:-/var/lib/plantgram/media}
+      PLANTGRAM_JWT_SECRET: ${PLANTGRAM_JWT_SECRET:?PLANTGRAM_JWT_SECRET is required}
+      PLANTGRAM_APPLE_CLIENT_ID: ${PLANTGRAM_APPLE_CLIENT_ID:-com.logan.Plantgram}
+      PLANTGRAM_ACCESS_TOKEN_TTL_SECONDS: ${PLANTGRAM_ACCESS_TOKEN_TTL_SECONDS:-900}
+      PLANTGRAM_REFRESH_TOKEN_TTL_SECONDS: ${PLANTGRAM_REFRESH_TOKEN_TTL_SECONDS:-2592000}
+      PLANTGRAM_DB_MAX_OPEN_CONNS: ${PLANTGRAM_DB_MAX_OPEN_CONNS:-10}
+    volumes:
+      - plantgram-data:/var/lib/plantgram/data
+      - plantgram-media:/var/lib/plantgram/media
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  plantgram-data:
+  plantgram-media:

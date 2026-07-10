@@ -59,47 +59,50 @@ struct PostCardView: View {
                     .scaledToFit()
                     .frame(maxWidth: .infinity)
             } else if let imageUrl = resolvedImageURL {
-                AuthenticatedRemoteImage(url: imageUrl, accessToken: sessionStore.accessToken)
-                    .frame(maxWidth: .infinity)
-            }
-            
-            VStack(alignment: .leading, spacing: 10) {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        
-                        Button(action: showReactionComposer) {
-                            Text("React")
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(isUpdatingReaction)
-                        
-                        ForEach(displayedReactions) { reaction in
-                            Button {
-                                Task { _ = await toggleReaction(reaction.emoji) }
-                            } label: {
-                                Text("\(reaction.emoji) \(reaction.count)")
-                                    .font(.subheadline)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(
-                                        reaction.mine
-                                            ? Color.accentColor.opacity(0.16)
-                                            : Color.secondary.opacity(0.12),
-                                        in: Capsule()
-                                    )
+                
+                VStack(alignment: .leading) {
+                    AuthenticatedRemoteImage(url: imageUrl, accessToken: sessionStore.accessToken)
+                        .frame(maxWidth: .infinity)
+                
+                    VStack(alignment: .leading, spacing: 10) {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                            
+                                Button(action: showReactionComposer) {
+                                    Text("React")
+                                }
+                                .buttonStyle(.bordered)
+                                .disabled(isUpdatingReaction)
+                            
+                                ForEach(displayedReactions) { reaction in
+                                    Button {
+                                        Task { _ = await toggleReaction(reaction.emoji) }
+                                    } label: {
+                                        Text("\(reaction.emoji) \(reaction.count)")
+                                            .font(.subheadline)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 6)
+                                            .background(
+                                                reaction.mine
+                                                ? Color.accentColor.opacity(0.16)
+                                                : Color.secondary.opacity(0.12),
+                                                in: Capsule()
+                                            )
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel("\(reaction.count) \(reaction.emoji) reactions")
+                                    .accessibilityHint(reaction.mine ? "Double tap to remove your reaction" : "Double tap to add your reaction")
+                                }
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("\(reaction.count) \(reaction.emoji) reactions")
-                            .accessibilityHint(reaction.mine ? "Double tap to remove your reaction" : "Double tap to add your reaction")
+                        }
+                    
+                        if isReactionComposerVisible {
+                            reactionComposer
                         }
                     }
-                }
-                
-                if isReactionComposerVisible {
-                    reactionComposer
+                    .padding(.horizontal, 16)
                 }
             }
-            .padding(.horizontal, 16)
             
             if !post.caption.isEmpty {
                 Text(post.caption)
