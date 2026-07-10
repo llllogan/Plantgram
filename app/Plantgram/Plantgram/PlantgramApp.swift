@@ -9,9 +9,12 @@ import SwiftUI
 
 @main
 struct PlantgramApp: App {
+    @StateObject private var sessionStore = SessionStore()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            AppRootView()
+                .environmentObject(sessionStore)
         }
     }
 }

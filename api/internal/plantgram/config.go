@@ -11,6 +11,7 @@ type Config struct {
 	DBPath          string
 	MediaDir        string
 	JWTSecret       string
+	AppleClientID   string
 	AccessTokenTTL  time.Duration
 	RefreshTokenTTL time.Duration
 	DBMaxOpenConns  int
@@ -22,6 +23,7 @@ func LoadConfig() Config {
 		DBPath:          env("PLANTGRAM_DB_PATH", "./data/plantgram.db"),
 		MediaDir:        env("PLANTGRAM_MEDIA_DIR", "./media"),
 		JWTSecret:       env("PLANTGRAM_JWT_SECRET", "dev-secret-change-me"),
+		AppleClientID:   env("PLANTGRAM_APPLE_CLIENT_ID", "com.logan.Plantgram"),
 		AccessTokenTTL:  envDuration("PLANTGRAM_ACCESS_TOKEN_TTL_SECONDS", 15*time.Minute),
 		RefreshTokenTTL: envDuration("PLANTGRAM_REFRESH_TOKEN_TTL_SECONDS", 30*24*time.Hour),
 		DBMaxOpenConns:  envInt("PLANTGRAM_DB_MAX_OPEN_CONNS", 10),

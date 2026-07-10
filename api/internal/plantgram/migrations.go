@@ -12,7 +12,7 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS human_accounts (
 	id TEXT PRIMARY KEY,
 	email TEXT NOT NULL UNIQUE,
-	password_hash TEXT NOT NULL,
+	apple_user_id TEXT NOT NULL UNIQUE,
 	display_name TEXT NOT NULL,
 	profile_media_id TEXT,
 	created_at TEXT NOT NULL,
@@ -149,6 +149,7 @@ CREATE TABLE IF NOT EXISTS post_comments (
 );
 
 CREATE INDEX IF NOT EXISTS idx_household_members_human ON household_members(human_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_human_apple_user_id ON human_accounts(apple_user_id);
 CREATE INDEX IF NOT EXISTS idx_plants_household ON plant_accounts(household_id);
 CREATE INDEX IF NOT EXISTS idx_planters_household ON planters(household_id);
 CREATE INDEX IF NOT EXISTS idx_posts_feed ON posts(household_id, occurred_at DESC, id DESC);
@@ -167,5 +168,52 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			return err
 		}
 	}
+	if err := migrateHumanAccountsToAppleOnly(ctx, db); err != nil {
+		return err
+	}
 	return nil
+}
+
+func migrateHumanAccountsToAppleOnly(ctx context.Context, db *sql.DB) error {
+	columns, err := tableColumns(ctx, db, "human_accounts")
+	if err != nil {
+		return err
+	}
+	if !columns["apple_user_id"] {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE human_accounts ADD COLUMN apple_user_id TEXT`); err != nil {
+			return err
+		}
+	}
+	for _, column := range []string{"password_hash", "auth_provider"} {
+		if !columns[column] {
+			continue
+		}
+		if _, err := db.ExecContext(ctx, `ALTER TABLE human_accounts DROP COLUMN `+column); err != nil {
+			return err
+		}
+	}
+	_, err = db.ExecContext(ctx, `CREATE UNIQUE INDEX IF NOT EXISTS idx_human_apple_user_id ON human_accounts(apple_user_id)`)
+	return err
+}
+
+func tableColumns(ctx context.Context, db *sql.DB, table string) (map[string]bool, error) {
+	rows, err := db.QueryContext(ctx, `PRAGMA table_info(`+table+`)`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	columns := map[string]bool{}
+	for rows.Next() {
+		var cid int
+		var name, typ string
+		var notNull int
+		var defaultValue sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &typ, &notNull, &defaultValue, &pk); err != nil {
+			return nil, err
+		}
+		columns[name] = true
+	}
+	return columns, rows.Err()
 }

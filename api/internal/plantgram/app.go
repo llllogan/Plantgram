@@ -10,7 +10,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"hash"
 	"io"
 	"mime"
 	"net/http"
@@ -104,8 +103,7 @@ func (a *App) Routes() http.Handler {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 
-	mux.HandleFunc("POST /auth/register", a.handleRegister)
-	mux.HandleFunc("POST /auth/login", a.handleLogin)
+	mux.HandleFunc("POST /auth/apple", a.handleAppleSignIn)
 	mux.HandleFunc("POST /auth/refresh", a.handleRefresh)
 	mux.HandleFunc("POST /auth/logout", a.requireAuth(a.handleLogout, false))
 	mux.HandleFunc("GET /me", a.requireAuth(a.handleMe, false))
@@ -186,63 +184,6 @@ func (a *App) requireAuth(next http.HandlerFunc, needHousehold bool) http.Handle
 func authFrom(r *http.Request) authContext {
 	v, _ := r.Context().Value(authContextKey).(authContext)
 	return v
-}
-
-func (a *App) handleRegister(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Email       string `json:"email"`
-		Password    string `json:"password"`
-		DisplayName string `json:"display_name"`
-	}
-	if !readJSON(w, r, &req) {
-		return
-	}
-	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
-	req.DisplayName = strings.TrimSpace(req.DisplayName)
-	if req.Email == "" || len(req.Password) < 8 || req.DisplayName == "" {
-		writeError(w, http.StatusBadRequest, "email, display_name, and password with at least 8 characters are required")
-		return
-	}
-
-	now := nowString()
-	humanID := newID("hum")
-	passwordHash, err := hashPassword(req.Password)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "password hash failed")
-		return
-	}
-	tx, err := a.db.BeginTx(r.Context(), nil)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "begin transaction failed")
-		return
-	}
-	defer tx.Rollback()
-	if _, err = tx.ExecContext(r.Context(), `INSERT INTO human_accounts (id, email, password_hash, display_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`, humanID, req.Email, passwordHash, req.DisplayName, now, now); err != nil {
-		writeError(w, http.StatusConflict, "email already registered")
-		return
-	}
-	if err = tx.Commit(); err != nil {
-		writeError(w, http.StatusInternalServerError, "create account failed")
-		return
-	}
-	a.writeAuthResponse(w, r, humanID, "")
-}
-
-func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}
-	if !readJSON(w, r, &req) {
-		return
-	}
-	var humanID, passwordHash string
-	err := a.db.QueryRowContext(r.Context(), `SELECT id, password_hash FROM human_accounts WHERE email = ?`, strings.ToLower(strings.TrimSpace(req.Email))).Scan(&humanID, &passwordHash)
-	if errors.Is(err, sql.ErrNoRows) || err != nil || !verifyPassword(req.Password, passwordHash) {
-		writeError(w, http.StatusUnauthorized, "invalid email or password")
-		return
-	}
-	a.writeAuthResponse(w, r, humanID, "")
 }
 
 func (a *App) handleRefresh(w http.ResponseWriter, r *http.Request) {
@@ -1078,60 +1019,6 @@ func (a *App) createRefreshToken(ctx context.Context, humanID string) (plain str
 func hashOpaqueToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
-}
-
-func hashPassword(password string) (string, error) {
-	salt := make([]byte, 16)
-	if _, err := rand.Read(salt); err != nil {
-		return "", err
-	}
-	dk := pbkdf2Key([]byte(password), salt, 210_000, 32, sha256.New)
-	return "pbkdf2_sha256$210000$" + base64.RawStdEncoding.EncodeToString(salt) + "$" + base64.RawStdEncoding.EncodeToString(dk), nil
-}
-
-func verifyPassword(password, encoded string) bool {
-	parts := strings.Split(encoded, "$")
-	if len(parts) != 4 || parts[0] != "pbkdf2_sha256" {
-		return false
-	}
-	iter, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return false
-	}
-	salt, err := base64.RawStdEncoding.DecodeString(parts[2])
-	if err != nil {
-		return false
-	}
-	want, err := base64.RawStdEncoding.DecodeString(parts[3])
-	if err != nil {
-		return false
-	}
-	got := pbkdf2Key([]byte(password), salt, iter, len(want), sha256.New)
-	return hmac.Equal(got, want)
-}
-
-func pbkdf2Key(password, salt []byte, iter, keyLen int, h func() hash.Hash) []byte {
-	prf := hmac.New(h, password)
-	hashLen := prf.Size()
-	numBlocks := (keyLen + hashLen - 1) / hashLen
-	var dk []byte
-	for block := 1; block <= numBlocks; block++ {
-		prf.Reset()
-		prf.Write(salt)
-		prf.Write([]byte{byte(block >> 24), byte(block >> 16), byte(block >> 8), byte(block)})
-		u := prf.Sum(nil)
-		t := append([]byte(nil), u...)
-		for i := 1; i < iter; i++ {
-			prf.Reset()
-			prf.Write(u)
-			u = prf.Sum(nil)
-			for x := range t {
-				t[x] ^= u[x]
-			}
-		}
-		dk = append(dk, t...)
-	}
-	return dk[:keyLen]
 }
 
 func readJSON(w http.ResponseWriter, r *http.Request, dst any) bool {

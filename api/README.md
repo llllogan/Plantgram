@@ -15,6 +15,7 @@ Defaults:
 - `PLANTGRAM_DB_PATH=./data/plantgram.db`
 - `PLANTGRAM_MEDIA_DIR=./media`
 - `PLANTGRAM_DB_MAX_OPEN_CONNS=10`
+- `PLANTGRAM_APPLE_CLIENT_ID=com.logan.Plantgram`
 - `PLANTGRAM_ACCESS_TOKEN_TTL_SECONDS=900`
 - `PLANTGRAM_REFRESH_TOKEN_TTL_SECONDS=2592000`
 
@@ -22,7 +23,7 @@ The DB path and media directory are regular filesystem paths. In a future Docker
 
 ## API Shape
 
-- Humans register and log in with email/password.
+- Humans create accounts and log in with Sign in with Apple.
 - Auth uses short-lived JWT access tokens and rotating opaque refresh tokens.
 - Humans must create or join a household before using household-scoped resources.
 - Plants are separate accounts from humans and cannot log in.
