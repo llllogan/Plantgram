@@ -351,7 +351,7 @@ func (a *App) handleListHouseholds(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer rows.Close()
-	var out []map[string]string
+	out := []map[string]string{}
 	for rows.Next() {
 		var id, name, role, createdAt string
 		if err := rows.Scan(&id, &name, &role, &createdAt); err != nil {

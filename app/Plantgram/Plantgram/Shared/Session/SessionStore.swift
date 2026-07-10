@@ -10,26 +10,50 @@ final class SessionStore: ObservableObject {
         case signedIn
     }
 
+    enum HouseholdState: Equatable {
+        case unknown
+        case checking
+        case needsHousehold
+        case active(Household)
+    }
+
     @Published private(set) var authState: AuthState = .checking
+    @Published private(set) var householdState: HouseholdState = .unknown
     @Published private(set) var currentUser: CurrentUser?
     @Published private(set) var accessToken: String?
     @Published private(set) var isAuthenticating = false
+    @Published private(set) var isCreatingHousehold = false
     @Published var authError: String?
+    @Published var householdError: String?
 
     private let authService: AuthService
+    private let accountService: AccountService
     private let userDefaults: UserDefaults
 
-    init(authService: AuthService = .live, userDefaults: UserDefaults = .standard) {
+    init(authService: AuthService = .live, accountService: AccountService = .live, userDefaults: UserDefaults = .standard) {
         self.authService = authService
+        self.accountService = accountService
         self.userDefaults = userDefaults
     }
 
-    func restore() {
+    var shouldShowHouseholdOnboarding: Bool {
+        householdState == .needsHousehold
+    }
+
+    var hasActiveHousehold: Bool {
+        if case .active = householdState {
+            return true
+        }
+        return false
+    }
+
+    func restore() async {
         guard authState == .checking else { return }
         accessToken = KeychainStore.string(for: .accessToken)
         if accessToken != nil {
             currentUser = loadStoredUser()
             authState = .signedIn
+            await refreshAccountState()
         } else {
             authState = .signedOut
         }
@@ -73,10 +97,42 @@ final class SessionStore: ObservableObject {
             currentUser = CurrentUser(id: nil, email: credential.email, displayName: fullName?.isEmpty == false ? fullName! : "Plantgram User")
             storeCurrentUser()
             authState = .signedIn
+            await refreshAccountState()
         } catch {
             authError = error.localizedDescription
             authState = .signedOut
+            householdState = .unknown
         }
+    }
+
+    func createHousehold(named name: String) async {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else {
+            householdError = "Household name is required."
+            return
+        }
+        guard let accessToken else {
+            householdError = "Log in again before creating a household."
+            return
+        }
+
+        householdError = nil
+        isCreatingHousehold = true
+        defer { isCreatingHousehold = false }
+
+        do {
+            let response = try await accountService.createHousehold(name: trimmedName, accessToken: accessToken)
+            KeychainStore.save(response.accessToken, for: .accessToken)
+            self.accessToken = response.accessToken
+            householdState = .active(response.household)
+            await refreshAccountState()
+        } catch {
+            householdError = error.localizedDescription
+        }
+    }
+
+    func chooseJoinHousehold() {
+        householdError = "Joining a household is coming soon."
     }
 
     func signOut() {
@@ -86,7 +142,46 @@ final class SessionStore: ObservableObject {
         accessToken = nil
         currentUser = nil
         authError = nil
+        householdError = nil
+        householdState = .unknown
         authState = .signedOut
+    }
+
+    private func refreshAccountState() async {
+        guard let accessToken else {
+            householdState = .unknown
+            return
+        }
+
+        let previousHouseholdState = householdState
+        householdError = nil
+        householdState = .checking
+
+        do {
+            let me = try await accountService.fetchMe(accessToken: accessToken)
+            currentUser = me.human
+            storeCurrentUser()
+
+            let households = try await accountService.listHouseholds(accessToken: accessToken)
+            if let activeHouseholdID = me.activeHouseholdId,
+               let activeHousehold = households.first(where: { $0.id == activeHouseholdID }) {
+                householdState = .active(activeHousehold)
+                return
+            }
+
+            guard let firstHousehold = households.first else {
+                householdState = .needsHousehold
+                return
+            }
+
+            let response = try await accountService.setActiveHousehold(firstHousehold.id, accessToken: accessToken)
+            KeychainStore.save(response.accessToken, for: .accessToken)
+            self.accessToken = response.accessToken
+            householdState = .active(firstHousehold)
+        } catch {
+            householdError = error.localizedDescription
+            householdState = previousHouseholdState == .checking ? .unknown : previousHouseholdState
+        }
     }
 
     private func loadStoredUser() -> CurrentUser? {
@@ -108,14 +203,24 @@ final class SessionStore: ObservableObject {
 
 extension SessionStore {
     static var previewSignedOut: SessionStore {
-        let store = SessionStore(authService: .preview)
+        let store = SessionStore(authService: .preview, accountService: .preview)
         store.authState = .signedOut
         return store
     }
 
     static var previewSignedIn: SessionStore {
-        let store = SessionStore(authService: .preview)
+        let store = SessionStore(authService: .preview, accountService: .preview)
         store.authState = .signedIn
+        store.householdState = .active(Household(id: "hhd_preview", name: "Home", role: "owner", createdAt: nil))
+        store.accessToken = "preview-token"
+        store.currentUser = CurrentUser(id: "hum_preview", email: "logan@example.com", displayName: "Logan")
+        return store
+    }
+
+    static var previewNeedsHousehold: SessionStore {
+        let store = SessionStore(authService: .preview, accountService: .preview)
+        store.authState = .signedIn
+        store.householdState = .needsHousehold
         store.accessToken = "preview-token"
         store.currentUser = CurrentUser(id: "hum_preview", email: "logan@example.com", displayName: "Logan")
         return store

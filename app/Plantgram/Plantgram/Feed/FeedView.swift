@@ -22,13 +22,17 @@ struct FeedView: View {
                 }
                 .listStyle(.plain)
                 .refreshable {
-                    await viewModel.load(accessToken: sessionStore.accessToken)
+                    if sessionStore.hasActiveHousehold {
+                        await viewModel.load(accessToken: sessionStore.accessToken)
+                    }
                 }
             }
         }
         .navigationTitle("Feed")
-        .task {
-            await viewModel.load(accessToken: sessionStore.accessToken)
+        .task(id: sessionStore.accessToken) {
+            if sessionStore.hasActiveHousehold {
+                await viewModel.load(accessToken: sessionStore.accessToken)
+            }
         }
     }
 }

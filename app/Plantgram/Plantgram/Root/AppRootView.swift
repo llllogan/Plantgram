@@ -14,15 +14,29 @@ struct AppRootView: View {
                 MainTabView()
             }
         }
+        .sheet(
+            isPresented: Binding(
+                get: { sessionStore.shouldShowHouseholdOnboarding },
+                set: { _ in }
+            )
+        ) {
+            HouseholdOnboardingSheet()
+                .environmentObject(sessionStore)
+        }
         .task {
-            sessionStore.restore()
+            await sessionStore.restore()
         }
     }
 }
 
 struct AppRootView_Previews: PreviewProvider {
     static var previews: some View {
-        AppRootView()
-            .environmentObject(SessionStore.previewSignedOut)
+        Group {
+            AppRootView()
+                .environmentObject(SessionStore.previewSignedOut)
+
+            AppRootView()
+                .environmentObject(SessionStore.previewNeedsHousehold)
+        }
     }
 }
