@@ -1,0 +1,8 @@
+/api/data
+
+# Xcode user/local state
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+*.moved-aside
+DerivedData/

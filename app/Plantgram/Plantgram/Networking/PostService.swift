@@ -1,8 +1,8 @@
 import Foundation
 
-struct PostService {
-    var fetchFeedHandler: (_ accessToken: String) async throws -> [FeedPost]
-    var createPostHandler: (_ caption: String, _ postType: PostType, _ imageData: Data?, _ accessToken: String) async throws -> FeedPost
+struct PostService: Sendable {
+    var fetchFeedHandler: @Sendable (_ accessToken: String) async throws -> [FeedPost]
+    var createPostHandler: @Sendable (_ caption: String, _ postType: PostType, _ imageData: Data?, _ accessToken: String) async throws -> FeedPost
 
     func fetchFeed(accessToken: String) async throws -> [FeedPost] {
         try await fetchFeedHandler(accessToken)

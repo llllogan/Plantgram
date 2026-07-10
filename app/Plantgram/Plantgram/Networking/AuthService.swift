@@ -1,7 +1,7 @@
 import Foundation
 
-struct AuthService {
-    var signInWithAppleHandler: (_ identityToken: String, _ authorizationCode: String, _ rawNonce: String, _ userIdentifier: String, _ email: String?, _ fullName: String?) async throws -> AuthTokenResponse
+struct AuthService: Sendable {
+    var signInWithAppleHandler: @Sendable (_ identityToken: String, _ authorizationCode: String, _ rawNonce: String, _ userIdentifier: String, _ email: String?, _ fullName: String?) async throws -> AuthTokenResponse
 
     func signInWithApple(
         identityToken: String,
