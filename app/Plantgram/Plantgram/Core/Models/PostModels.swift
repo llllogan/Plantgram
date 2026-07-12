@@ -58,6 +58,7 @@ struct FeedResponse: Decodable {
 
 struct FeedPost: Decodable, Identifiable {
     let id: String
+    let createdByHumanId: String?
     let author: FeedActor
     let postType: PostType
     let caption: String
@@ -70,6 +71,7 @@ struct FeedPost: Decodable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case id
+        case createdByHumanId
         case author
         case postType
         case caption
@@ -91,9 +93,11 @@ struct FeedPost: Decodable, Identifiable {
         occurredAt: String,
         reactions: [PostReaction],
         commentCount: Int,
-        plantIds: [String] = []
+        plantIds: [String] = [],
+        createdByHumanId: String? = nil
     ) {
         self.id = id
+        self.createdByHumanId = createdByHumanId
         self.author = author
         self.postType = postType
         self.caption = caption
@@ -108,6 +112,7 @@ struct FeedPost: Decodable, Identifiable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
+        createdByHumanId = try container.decodeIfPresent(String.self, forKey: .createdByHumanId)
         author = try container.decode(FeedActor.self, forKey: .author)
         postType = try container.decode(PostType.self, forKey: .postType)
         caption = try container.decodeIfPresent(String.self, forKey: .caption) ?? ""

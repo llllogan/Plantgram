@@ -92,6 +92,15 @@ func TestCorePlantgramFlow(t *testing.T) {
 	if len(timelinePosts) != 1 || timelinePosts[0].(map[string]any)["id"] != postID {
 		t.Fatalf("unexpected plant timeline: %#v", timelineResp)
 	}
+
+	humanProfile := doJSON(t, handler, http.MethodGet, "/humans/"+humanID, token, nil)
+	if humanProfile["human"].(map[string]any)["id"] != humanID {
+		t.Fatalf("unexpected human profile: %#v", humanProfile)
+	}
+	humanPosts := doJSON(t, handler, http.MethodGet, "/humans/"+humanID+"/posts", token, nil)["posts"].([]any)
+	if len(humanPosts) != 1 || humanPosts[0].(map[string]any)["id"] != postID {
+		t.Fatalf("unexpected human posts: %#v", humanPosts)
+	}
 }
 
 func TestDeleteAccountTransfersOrDeletesHouseholds(t *testing.T) {

@@ -19,7 +19,7 @@ struct FeedView: View {
             } else {
                 List(viewModel.posts) { post in
                     PostCardView(post: post, plants: gardenViewModel.plants)
-                        .listRowSeparator(.hidden)
+//                        .listRowSeparator(.hidden)
                         .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 8, trailing: 0))
                         .onAppear {
                             guard post.id == viewModel.posts.last?.id else { return }
@@ -38,7 +38,12 @@ struct FeedView: View {
                 }
                 .refreshable {
                     if sessionStore.hasActiveHousehold {
-                        await viewModel.load(accessToken: sessionStore.accessToken)
+                        await viewModel.load(
+                            accessToken: sessionStore.accessToken,
+                            householdID: sessionStore.activeHousehold?.id,
+                            refreshID: refreshID,
+                            force: true
+                        )
                         await gardenViewModel.load(accessToken: sessionStore.accessToken)
                     }
                 }
@@ -48,7 +53,11 @@ struct FeedView: View {
         .toolbarTitleDisplayMode(.inlineLarge)
         .task(id: "\(sessionStore.accessToken ?? "")-\(sessionStore.activeHousehold?.id ?? "none")-\(refreshID)") {
             if sessionStore.hasActiveHousehold {
-                await viewModel.load(accessToken: sessionStore.accessToken)
+                await viewModel.load(
+                    accessToken: sessionStore.accessToken,
+                    householdID: sessionStore.activeHousehold?.id,
+                    refreshID: refreshID
+                )
             }
         }
         .task(id: "plants-\(sessionStore.accessToken ?? "")-\(sessionStore.activeHousehold?.id ?? "none")") {

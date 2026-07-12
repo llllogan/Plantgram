@@ -22,7 +22,12 @@ struct GardenView: View {
                         spacing: 18
                     ) {
                         ForEach(viewModel.plants) { plant in
-                            PlantGridItem(plant: plant, accessToken: sessionStore.accessToken)
+                            NavigationLink {
+                                PublicProfileView(reference: .plant(plant.id))
+                            } label: {
+                                PlantGridItem(plant: plant, accessToken: sessionStore.accessToken)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                     .padding(16)

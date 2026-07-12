@@ -20,6 +20,7 @@ struct PostCardView: View {
     @State private var commentText = ""
     @State private var isEmojiPickerPresented = false
     @State private var isTaggedPlantsSheetPresented = false
+    @State private var selectedProfileReference: ProfileReference?
     @State private var interactionError: String?
     @FocusState private var isCommentFieldFocused: Bool
     @FocusState private var isReactionFieldFocused: Bool
@@ -35,17 +36,16 @@ struct PostCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                Circle()
-                    .fill(.green.opacity(0.16))
-                    .frame(width: 22, height: 22)
-                    .overlay {
-                        Image(systemName: post.author.type == "plant" ? "leaf.fill" : "person.fill")
-                            .foregroundStyle(.green)
-                            .font(.caption)
+                if let authorProfileReference {
+                    Button {
+                        selectedProfileReference = authorProfileReference
+                    } label: {
+                        authorHeader
                     }
-
-                Text(post.author.displayName)
-                    .font(.headline)
+                    .buttonStyle(.plain)
+                } else {
+                    authorHeader
+                }
 
                 Spacer()
                 
@@ -99,6 +99,9 @@ struct PostCardView: View {
                 isCommentComposerVisible = false
             }
         }
+        .navigationDestination(item: $selectedProfileReference) { reference in
+            PublicProfileView(reference: reference)
+        }
     }
 
     private var commentsSection: some View {
@@ -137,6 +140,22 @@ struct PostCardView: View {
             }
         }
         .padding(.horizontal, 16)
+    }
+
+    private var authorHeader: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(.green.opacity(0.16))
+                .frame(width: 22, height: 22)
+                .overlay {
+                    Image(systemName: post.author.type == "plant" ? "leaf.fill" : "person.fill")
+                        .foregroundStyle(.green)
+                        .font(.caption)
+                }
+
+            Text(post.author.displayName)
+                .font(.headline)
+        }
     }
 
     private var commentComposer: some View {
@@ -235,7 +254,13 @@ struct PostCardView: View {
             TaggedPlantsSheet(
                 plants: taggedPlants,
                 accessToken: sessionStore.accessToken
-            )
+            ) { plant in
+                Task { @MainActor in
+                    isTaggedPlantsSheetPresented = false
+                    await Task.yield()
+                    selectedProfileReference = .plant(plant.id)
+                }
+            }
         }
     }
 
@@ -258,6 +283,9 @@ struct PostCardView: View {
         do {
             comments = try await postService.fetchComments(postID: post.id, accessToken: accessToken)
         } catch {
+            if isCancellation(error) {
+                return
+            }
             interactionError = error.localizedDescription
         }
     }
@@ -283,6 +311,10 @@ struct PostCardView: View {
         } catch {
             interactionError = error.localizedDescription
         }
+    }
+
+    private func isCancellation(_ error: Error) -> Bool {
+        error is CancellationError || (error as? URLError)?.code == .cancelled
     }
 
     private func setReaction(_ emoji: String) async -> Bool {
@@ -361,6 +393,16 @@ struct PostCardView: View {
         plants.filter { post.plantIds.contains($0.id) }
     }
 
+    private var authorProfileReference: ProfileReference? {
+        if post.author.type == "plant", let plantID = post.plantIds.first {
+            return .plant(plantID)
+        }
+        if let humanID = post.createdByHumanId {
+            return .human(humanID)
+        }
+        return nil
+    }
+
     private let heartEmoji = "❤️"
     private let heartEmojis = ["❤️", "❤", "♥️", "♥"]
 
@@ -402,6 +444,7 @@ private struct TaggedPlantsSheet: View {
 
     let plants: [PlantAccount]
     let accessToken: String?
+    let onSelectPlant: (PlantAccount) -> Void
 
     var body: some View {
         NavigationStack {
@@ -411,24 +454,29 @@ private struct TaggedPlantsSheet: View {
                     spacing: 10
                 ) {
                     ForEach(plants) { plant in
-                        HStack(spacing: 6) {
-                            PlantProfileImage(
-                                mediaID: plant.profileMediaId,
-                                accessToken: accessToken
-                            )
+                        Button {
+                            onSelectPlant(plant)
+                        } label: {
+                            HStack(spacing: 6) {
+                                PlantProfileImage(
+                                    mediaID: plant.profileMediaId,
+                                    accessToken: accessToken
+                                )
 
-                            Text(plant.name)
-                                .font(.caption.weight(.semibold))
-                                .lineLimit(2)
-                                .multilineTextAlignment(.leading)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                                Text(plant.name)
+                                    .font(.caption.weight(.semibold))
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .padding(8)
+                            .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+                            .background(
+                                Color.secondary.opacity(0.10),
+                                in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            )
                         }
-                        .padding(8)
-                        .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
-                        .background(
-                            Color.secondary.opacity(0.10),
-                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        )
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding(16)

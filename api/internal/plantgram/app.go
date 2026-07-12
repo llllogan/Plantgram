@@ -121,6 +121,8 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /plants/{id}", a.requireAuth(a.handleGetPlant, true))
 	mux.HandleFunc("PATCH /plants/{id}", a.requireAuth(a.handleUpdatePlant, true))
 	mux.HandleFunc("GET /plants/{id}/timeline", a.requireAuth(a.handlePlantTimeline, true))
+	mux.HandleFunc("GET /humans/{id}", a.requireAuth(a.handleGetHuman, true))
+	mux.HandleFunc("GET /humans/{id}/posts", a.requireAuth(a.handleHumanPosts, true))
 
 	mux.HandleFunc("POST /planters", a.requireAuth(a.handleCreatePlanter, true))
 	mux.HandleFunc("GET /planters", a.requireAuth(a.handleListPlanters, true))
@@ -644,6 +646,37 @@ func (a *App) handleGetPlant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"plant": p})
+}
+
+func (a *App) handleGetHuman(w http.ResponseWriter, r *http.Request) {
+	ac := authFrom(r)
+	var profile struct {
+		ID             string         `json:"id"`
+		DisplayName    string         `json:"display_name"`
+		ProfileMediaID nullableString `json:"profile_media_id"`
+		CreatedAt      string         `json:"created_at"`
+	}
+	err := a.db.QueryRowContext(r.Context(), `
+SELECT h.id, h.display_name, h.profile_media_id, h.created_at
+FROM human_accounts h
+JOIN household_members hm ON hm.human_id = h.id
+WHERE h.id = ? AND hm.household_id = ?`, r.PathValue("id"), ac.HouseholdID).
+		Scan(&profile.ID, &profile.DisplayName, &profile.ProfileMediaID, &profile.CreatedAt)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "human profile not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"human": profile})
+}
+
+func (a *App) handleHumanPosts(w http.ResponseWriter, r *http.Request) {
+	ac := authFrom(r)
+	var exists int
+	if err := a.db.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM household_members WHERE household_id = ? AND human_id = ?`, ac.HouseholdID, r.PathValue("id")).Scan(&exists); err != nil || exists == 0 {
+		writeError(w, http.StatusNotFound, "human profile not found")
+		return
+	}
+	a.writePostList(w, r, `SELECT id FROM posts WHERE household_id = ? AND created_by_human_id = ? AND (? = '' OR occurred_at < ?) ORDER BY occurred_at DESC, id DESC LIMIT ?`, ac.HouseholdID, r.PathValue("id"), cursorTime(r), cursorTime(r), limit(r))
 }
 
 func (a *App) handleUpdatePlant(w http.ResponseWriter, r *http.Request) {

@@ -227,6 +227,7 @@ struct PlantProfileImage: View {
     let mediaID: String?
     let accessToken: String?
     var size: CGFloat = 32
+    var placeholderSystemImage = "leaf.fill"
 
     @State private var image: UIImage?
 
@@ -237,7 +238,7 @@ struct PlantProfileImage: View {
                     .resizable()
                     .scaledToFill()
             } else {
-                Image(systemName: "leaf.fill")
+                Image(systemName: placeholderSystemImage)
                     .foregroundStyle(.green)
             }
         }
@@ -277,9 +278,10 @@ struct PlantProfileImage: View {
     let mediaID: String?
     let accessToken: String?
     var size: CGFloat = 32
+    var placeholderSystemImage = "leaf.fill"
 
     var body: some View {
-        Image(systemName: "leaf.fill")
+        Image(systemName: placeholderSystemImage)
             .foregroundStyle(.green)
             .frame(width: size, height: size)
             .background(.green.opacity(0.14))

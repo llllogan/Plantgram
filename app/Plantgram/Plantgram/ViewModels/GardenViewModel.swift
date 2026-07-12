@@ -29,6 +29,9 @@ final class GardenViewModel: ObservableObject {
             plants = try await plantService.fetchPlants(accessToken: accessToken)
             message = nil
         } catch {
+            if isCancellation(error) {
+                return
+            }
             plants = []
             message = error.localizedDescription
         }
@@ -76,5 +79,9 @@ final class GardenViewModel: ObservableObject {
             message = error.localizedDescription
             return false
         }
+    }
+
+    private func isCancellation(_ error: Error) -> Bool {
+        error is CancellationError || (error as? URLError)?.code == .cancelled
     }
 }

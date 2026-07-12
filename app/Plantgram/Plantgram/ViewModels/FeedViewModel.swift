@@ -10,20 +10,29 @@ final class FeedViewModel: ObservableObject {
     private let postService: PostService
     private var nextCursor: String?
     private var hasLoadedAllPages = false
+    private var loadedKey: String?
 
     init(postService: PostService = .live) {
         self.postService = postService
     }
 
-    func load(accessToken: String?) async {
+    func load(accessToken: String?, householdID: String? = nil, refreshID: Int = 0, force: Bool = false) async {
         guard let accessToken else {
             message = "Log in to see your household feed."
+            return
+        }
+
+        let key = "\(householdID ?? "none")-\(refreshID)"
+        if !force,
+           loadedKey == key,
+           (!posts.isEmpty || hasLoadedAllPages) {
             return
         }
 
         posts = []
         nextCursor = nil
         hasLoadedAllPages = false
+        loadedKey = key
         await loadNextPage(accessToken: accessToken)
     }
 
@@ -44,9 +53,16 @@ final class FeedViewModel: ObservableObject {
             hasLoadedAllPages = response.nextCursor == nil || response.posts.isEmpty
             message = nil
         } catch {
+            if isCancellation(error) {
+                return
+            }
             if posts.isEmpty {
                 message = error.localizedDescription
             }
         }
+    }
+
+    private func isCancellation(_ error: Error) -> Bool {
+        error is CancellationError || (error as? URLError)?.code == .cancelled
     }
 }
