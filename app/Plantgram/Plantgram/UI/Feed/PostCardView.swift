@@ -46,13 +46,17 @@ struct PostCardView: View {
 
                 Spacer()
                 
-                Label(post.postType.title, systemImage: post.postType.systemImage)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.tint)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.accentColor.opacity(0.14), in: Capsule())
-                    .accessibilityLabel("Post type: \(post.postType.title)")
+                HStack(spacing: 4) {
+                    Image(systemName: post.postType.systemImage)
+                        .font(.caption.weight(.semibold))
+                    Text(post.postType.title)
+                        .font(.subheadline.weight(.semibold))
+                }
+                .foregroundStyle(.tint)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.accentColor.opacity(0.14), in: Capsule())
+                .accessibilityLabel("Post type: \(post.postType.title)")
             }
             .padding(.horizontal, 16)
 
