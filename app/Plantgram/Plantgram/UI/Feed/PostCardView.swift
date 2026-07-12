@@ -17,8 +17,7 @@ struct PostCardView: View {
     @State private var isSubmittingComment = false
     @State private var isUpdatingReaction = false
     @State private var commentText = ""
-    @State private var reactionText = ""
-    @State private var isReactionComposerVisible = false
+    @State private var isEmojiPickerPresented = false
     @State private var interactionError: String?
     @FocusState private var isCommentFieldFocused: Bool
     @FocusState private var isReactionFieldFocused: Bool
@@ -64,50 +63,12 @@ struct PostCardView: View {
                         .scaledToFit()
                 }
             } else if let imageUrl = resolvedImageURL {
-                
-                VStack(alignment: .leading) {
-                    AuthenticatedRemoteImage(url: imageUrl, accessToken: sessionStore.accessToken)
-                        .frame(maxWidth: .infinity)
-                
-                    VStack(alignment: .leading, spacing: 10) {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                            
-                                Button(action: showReactionComposer) {
-                                    Text("React")
-                                }
-                                .buttonStyle(.bordered)
-                                .disabled(isUpdatingReaction)
-                            
-                                ForEach(displayedReactions) { reaction in
-                                    Button {
-                                        Task { _ = await toggleReaction(reaction.emoji) }
-                                    } label: {
-                                        Text("\(reaction.emoji) \(reaction.count)")
-                                            .font(.subheadline)
-                                            .padding(.horizontal, 10)
-                                            .padding(.vertical, 6)
-                                            .background(
-                                                reaction.mine
-                                                ? Color.accentColor.opacity(0.16)
-                                                : Color.secondary.opacity(0.12),
-                                                in: Capsule()
-                                            )
-                                    }
-                                    .buttonStyle(.plain)
-                                    .accessibilityLabel("\(reaction.count) \(reaction.emoji) reactions")
-                                    .accessibilityHint(reaction.mine ? "Double tap to remove your reaction" : "Double tap to add your reaction")
-                                }
-                            }
-                        }
-                    
-                        if isReactionComposerVisible {
-                            reactionComposer
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                }
+                AuthenticatedRemoteImage(url: imageUrl, accessToken: sessionStore.accessToken)
+                    .frame(maxWidth: .infinity)
             }
+
+            reactionRow
+                .padding(.horizontal, 16)
             
             if !post.caption.isEmpty {
                 Text(post.caption)
@@ -126,11 +87,6 @@ struct PostCardView: View {
         .padding(.vertical, 12)
         .task(id: "\(post.id)-\(post.commentCount)") {
             await loadComments()
-        }
-        .onChange(of: isReactionFieldFocused) { _, isFocused in
-            if !isFocused {
-                dismissReactionComposer()
-            }
         }
         .onChange(of: isCommentFieldFocused) { _, isFocused in
             if !isFocused && commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -204,63 +160,64 @@ struct PostCardView: View {
         }
     }
 
-    private var reactionComposer: some View {
-        HStack(spacing: 8) {
-            TextField("Type or paste an emoji", text: $reactionText)
-                .textFieldStyle(.roundedBorder)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .focused($isReactionFieldFocused)
-                .onSubmit {
-                    Task { await submitReaction() }
-                }
-
+    private var reactionRow: some View {
+        HStack(spacing: 14) {
             Button {
-                Task { await submitReaction() }
+                Task { _ = await setReaction(heartEmoji) }
             } label: {
-                if isUpdatingReaction {
-                    ProgressView()
-                        .controlSize(.small)
+                if myHeartReaction != nil {
+                    Text(heartEmoji)
+                        .font(.title3)
                 } else {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.title2)
+                    Image(systemName: "heart")
+                        .font(.title3)
                 }
             }
             .buttonStyle(.plain)
-            .disabled(isUpdatingReaction || reactionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .accessibilityLabel("Add reaction")
+            .disabled(isUpdatingReaction)
+            .accessibilityLabel(myHeartReaction == nil ? "Add heart reaction" : "Remove heart reaction")
+
+            Button {
+                isEmojiPickerPresented = true
+            } label: {
+                if let myEmojiReaction {
+                    Text(myEmojiReaction.emoji)
+                        .font(.title3)
+                } else {
+                    Image(systemName: "face.smiling")
+                        .font(.title3)
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(isUpdatingReaction)
+            .accessibilityLabel(myEmojiReaction == nil ? "Choose an emoji reaction" : "Change emoji reaction")
+
+            Divider()
+                .frame(height: 22)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(otherReactions) { reaction in
+                        Text("\(reaction.emoji) \(reaction.count)")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel("\(reaction.count) \(reaction.emoji) reactions")
+                    }
+                }
+            }
+        }
+        .frame(minHeight: 32)
+        .sheet(isPresented: $isEmojiPickerPresented) {
+            EmojiPickerSheet { emoji in
+                isEmojiPickerPresented = false
+                Task { _ = await setReaction(emoji) }
+            }
         }
     }
 
     private func showCommentComposer() {
         isCommentComposerVisible = true
         isCommentFieldFocused = true
-    }
-
-    private func showReactionComposer() {
-        isReactionComposerVisible = true
-        isReactionFieldFocused = true
-    }
-
-    private func dismissReactionComposer() {
-        guard isReactionComposerVisible else { return }
-        isReactionComposerVisible = false
-        reactionText = ""
-    }
-
-    private func submitReaction() async {
-        let emoji = reactionText.trimmingCharacters(in: .whitespacesAndNewlines)
-        interactionError = nil
-        guard emoji.isSingleEmojiReaction else {
-            interactionError = "Enter one emoji. Flags, skin tones, and family emojis are supported."
-            return
-        }
-
-        if await toggleReaction(emoji) {
-            reactionText = ""
-            isReactionComposerVisible = false
-            isReactionFieldFocused = false
-        }
     }
 
     private func loadComments() async {
@@ -304,7 +261,7 @@ struct PostCardView: View {
         }
     }
 
-    private func toggleReaction(_ emoji: String) async -> Bool {
+    private func setReaction(_ emoji: String) async -> Bool {
         guard !isUpdatingReaction else { return false }
         guard let accessToken = sessionStore.accessToken else {
             interactionError = "Log in again to react."
@@ -312,23 +269,22 @@ struct PostCardView: View {
         }
 
         let previousReactions = displayedReactions
-        let isRemoving: Bool
+        let previousMine = displayedReactions.filter(\.mine)
+        let isRemoving = emoji == heartEmoji
+            ? myHeartReaction != nil
+            : previousMine.contains { $0.emoji == emoji }
 
-        if let index = displayedReactions.firstIndex(where: { $0.emoji == emoji }) {
-            isRemoving = displayedReactions[index].mine
-            let reaction = displayedReactions[index]
-            if isRemoving {
-                if reaction.count <= 1 {
-                    displayedReactions.remove(at: index)
-                } else {
-                    displayedReactions[index] = PostReaction(emoji: emoji, count: reaction.count - 1, mine: false)
-                }
-            } else {
+        for reaction in previousMine {
+            removeReactionLocally(reaction)
+        }
+
+        if !isRemoving {
+            if let index = displayedReactions.firstIndex(where: { $0.emoji == emoji }) {
+                let reaction = displayedReactions[index]
                 displayedReactions[index] = PostReaction(emoji: emoji, count: reaction.count + 1, mine: true)
+            } else {
+                displayedReactions.append(PostReaction(emoji: emoji, count: 1, mine: true))
             }
-        } else {
-            isRemoving = false
-            displayedReactions.append(PostReaction(emoji: emoji, count: 1, mine: true))
         }
 
         isUpdatingReaction = true
@@ -336,9 +292,10 @@ struct PostCardView: View {
         defer { isUpdatingReaction = false }
 
         do {
-            if isRemoving {
-                try await postService.removeReaction(postID: post.id, emoji: emoji, accessToken: accessToken)
-            } else {
+            for reaction in previousMine {
+                try await postService.removeReaction(postID: post.id, emoji: reaction.emoji, accessToken: accessToken)
+            }
+            if !isRemoving {
                 try await postService.addReaction(postID: post.id, emoji: emoji, accessToken: accessToken)
             }
             return true
@@ -348,6 +305,36 @@ struct PostCardView: View {
             return false
         }
     }
+
+    private func removeReactionLocally(_ reaction: PostReaction) {
+        guard let index = displayedReactions.firstIndex(where: { $0.emoji == reaction.emoji }) else {
+            return
+        }
+        if reaction.count <= 1 {
+            displayedReactions.remove(at: index)
+        } else {
+            displayedReactions[index] = PostReaction(
+                emoji: reaction.emoji,
+                count: reaction.count - 1,
+                mine: false
+            )
+        }
+    }
+
+    private var myHeartReaction: PostReaction? {
+        displayedReactions.first { $0.mine && heartEmojis.contains($0.emoji) }
+    }
+
+    private var myEmojiReaction: PostReaction? {
+        displayedReactions.first { $0.mine && !heartEmojis.contains($0.emoji) }
+    }
+
+    private var otherReactions: [PostReaction] {
+        displayedReactions.filter { !$0.mine }
+    }
+
+    private let heartEmoji = "❤️"
+    private let heartEmojis = ["❤️", "❤", "♥️", "♥"]
 
     private var resolvedImageURL: URL? {
         guard let imageUrl = post.imageUrl else {
