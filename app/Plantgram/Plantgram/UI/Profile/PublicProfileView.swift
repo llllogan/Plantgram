@@ -155,28 +155,33 @@ private struct ProfilePostTile: View {
     @State private var image: UIImage?
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else if let imageURL = resolvedImageURL {
-                Color.secondary.opacity(0.10)
-                    .overlay { ProgressView() }
-                    .task(id: "\(imageURL.absoluteString)-\(accessToken ?? "")") {
-                        await loadImage(from: imageURL)
+        Color.clear
+            .aspectRatio(1, contentMode: .fit)
+            .overlay {
+                ZStack(alignment: .topLeading) {
+                    if let image {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else if let imageURL = resolvedImageURL {
+                        Color.secondary.opacity(0.10)
+                            .overlay { ProgressView() }
+                            .task(id: "\(imageURL.absoluteString)-\(accessToken ?? "")") {
+                                await loadImage(from: imageURL)
+                            }
+                    } else {
+                        Color.secondary.opacity(0.10)
+                        Text(post.caption)
+                            .font(.caption)
+                            .foregroundStyle(.primary)
+                            .multilineTextAlignment(.leading)
+                            .lineLimit(8)
+                            .padding(8)
                     }
-            } else {
-                Color.secondary.opacity(0.10)
-                Text(post.caption)
-                    .font(.caption)
-                    .foregroundStyle(.primary)
-                    .multilineTextAlignment(.leading)
-                    .lineLimit(8)
-                    .padding(8)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-        }
-        .aspectRatio(1, contentMode: .fit)
         .clipped()
     }
 
