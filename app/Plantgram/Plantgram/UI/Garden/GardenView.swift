@@ -16,8 +16,16 @@ struct GardenView: View {
                     message: viewModel.message ?? "Add the first plant in your household garden."
                 )
             } else {
-                List(viewModel.plants) { plant in
-                    PlantRowView(plant: plant)
+                ScrollView {
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3),
+                        spacing: 18
+                    ) {
+                        ForEach(viewModel.plants) { plant in
+                            PlantGridItem(plant: plant, accessToken: sessionStore.accessToken)
+                        }
+                    }
+                    .padding(16)
                 }
                 .refreshable {
                     if sessionStore.hasActiveHousehold {
@@ -49,38 +57,29 @@ struct GardenView: View {
     }
 }
 
-private struct PlantRowView: View {
+private struct PlantGridItem: View {
     let plant: PlantAccount
+    let accessToken: String?
 
     var body: some View {
-        HStack(spacing: 12) {
-            Circle()
-                .fill(.green.opacity(0.16))
-                .frame(width: 44, height: 44)
-                .overlay {
-                    Image(systemName: "leaf.fill")
-                        .foregroundStyle(.green)
-                }
+        VStack(spacing: 8) {
+            PlantProfileImage(
+                mediaID: plant.profileMediaId,
+                accessToken: accessToken,
+                size: 72
+            )
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(plant.name)
-                    .font(.headline)
-
-                if !plant.species.isEmpty {
-                    Text(plant.species)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-
-                if !plant.notes.isEmpty {
-                    Text(plant.notes)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-            }
+            Text(plant.name)
+                .font(.headline)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, minHeight: 118)
+        .background(Color.secondary.opacity(0.10), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(plant.name)
     }
 }
 

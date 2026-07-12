@@ -3,6 +3,7 @@ import SwiftUI
 struct FeedView: View {
     @EnvironmentObject private var sessionStore: SessionStore
     @StateObject private var viewModel = FeedViewModel()
+    @StateObject private var gardenViewModel = GardenViewModel()
     let refreshID: Int
 
     var body: some View {
@@ -17,7 +18,7 @@ struct FeedView: View {
                 )
             } else {
                 List(viewModel.posts) { post in
-                    PostCardView(post: post)
+                    PostCardView(post: post, plants: gardenViewModel.plants)
                         .listRowSeparator(.hidden)
                         .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 8, trailing: 0))
                         .onAppear {
@@ -38,6 +39,7 @@ struct FeedView: View {
                 .refreshable {
                     if sessionStore.hasActiveHousehold {
                         await viewModel.load(accessToken: sessionStore.accessToken)
+                        await gardenViewModel.load(accessToken: sessionStore.accessToken)
                     }
                 }
             }
@@ -47,6 +49,11 @@ struct FeedView: View {
         .task(id: "\(sessionStore.accessToken ?? "")-\(sessionStore.activeHousehold?.id ?? "none")-\(refreshID)") {
             if sessionStore.hasActiveHousehold {
                 await viewModel.load(accessToken: sessionStore.accessToken)
+            }
+        }
+        .task(id: "plants-\(sessionStore.accessToken ?? "")-\(sessionStore.activeHousehold?.id ?? "none")") {
+            if sessionStore.hasActiveHousehold {
+                await gardenViewModel.load(accessToken: sessionStore.accessToken)
             }
         }
     }

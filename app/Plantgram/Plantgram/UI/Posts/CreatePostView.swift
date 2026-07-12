@@ -222,9 +222,10 @@ struct CreatePostView: View {
 }
 
 #if canImport(UIKit)
-private struct PlantProfileImage: View {
+struct PlantProfileImage: View {
     let mediaID: String?
     let accessToken: String?
+    var size: CGFloat = 32
 
     @State private var image: UIImage?
 
@@ -239,7 +240,7 @@ private struct PlantProfileImage: View {
                     .foregroundStyle(.green)
             }
         }
-        .frame(width: 32, height: 32)
+        .frame(width: size, height: size)
         .background(.green.opacity(0.14))
         .clipShape(Circle())
         .task(id: "\(mediaID ?? "none")-\(accessToken ?? "")") {
@@ -271,14 +272,15 @@ private struct PlantProfileImage: View {
     }
 }
 #else
-private struct PlantProfileImage: View {
+struct PlantProfileImage: View {
     let mediaID: String?
     let accessToken: String?
+    var size: CGFloat = 32
 
     var body: some View {
         Image(systemName: "leaf.fill")
             .foregroundStyle(.green)
-            .frame(width: 32, height: 32)
+            .frame(width: size, height: size)
             .background(.green.opacity(0.14))
             .clipShape(Circle())
     }

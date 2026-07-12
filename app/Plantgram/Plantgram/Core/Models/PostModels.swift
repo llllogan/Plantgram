@@ -63,6 +63,7 @@ struct FeedPost: Decodable, Identifiable {
     let caption: String
     let imageMediaId: String?
     let imageUrl: URL?
+    let plantIds: [String]
     let occurredAt: String
     let reactions: [PostReaction]
     let commentCount: Int
@@ -74,6 +75,7 @@ struct FeedPost: Decodable, Identifiable {
         case caption
         case imageMediaId
         case imageUrl
+        case plantIds
         case occurredAt
         case reactions
         case commentCount
@@ -88,7 +90,8 @@ struct FeedPost: Decodable, Identifiable {
         imageUrl: URL?,
         occurredAt: String,
         reactions: [PostReaction],
-        commentCount: Int
+        commentCount: Int,
+        plantIds: [String] = []
     ) {
         self.id = id
         self.author = author
@@ -96,6 +99,7 @@ struct FeedPost: Decodable, Identifiable {
         self.caption = caption
         self.imageMediaId = imageMediaId
         self.imageUrl = imageUrl
+        self.plantIds = plantIds
         self.occurredAt = occurredAt
         self.reactions = reactions
         self.commentCount = commentCount
@@ -109,6 +113,7 @@ struct FeedPost: Decodable, Identifiable {
         caption = try container.decodeIfPresent(String.self, forKey: .caption) ?? ""
         imageMediaId = try container.decodeIfPresent(String.self, forKey: .imageMediaId)
         imageUrl = try container.decodeIfPresent(URL.self, forKey: .imageUrl)
+        plantIds = try container.decodeIfPresent([String].self, forKey: .plantIds) ?? []
         occurredAt = try container.decodeIfPresent(String.self, forKey: .occurredAt) ?? ""
         reactions = try container.decodeIfPresent([PostReaction].self, forKey: .reactions) ?? []
         commentCount = try container.decodeIfPresent(Int.self, forKey: .commentCount) ?? 0

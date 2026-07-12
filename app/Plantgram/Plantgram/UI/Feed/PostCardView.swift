@@ -6,6 +6,7 @@ import UIKit
 struct PostCardView: View {
     @EnvironmentObject private var sessionStore: SessionStore
     let post: FeedPost
+    let plants: [PlantAccount]
     var previewImage: Image?
 
     private let postService: PostService
@@ -18,12 +19,14 @@ struct PostCardView: View {
     @State private var isUpdatingReaction = false
     @State private var commentText = ""
     @State private var isEmojiPickerPresented = false
+    @State private var isTaggedPlantsSheetPresented = false
     @State private var interactionError: String?
     @FocusState private var isCommentFieldFocused: Bool
     @FocusState private var isReactionFieldFocused: Bool
 
-    init(post: FeedPost, previewImage: Image? = nil, postService: PostService = .live) {
+    init(post: FeedPost, plants: [PlantAccount] = [], previewImage: Image? = nil, postService: PostService = .live) {
         self.post = post
+        self.plants = plants
         self.previewImage = previewImage
         self.postService = postService
         _displayedReactions = State(initialValue: post.reactions)
@@ -70,7 +73,7 @@ struct PostCardView: View {
                 AuthenticatedRemoteImage(url: imageUrl, accessToken: sessionStore.accessToken)
                     .frame(maxWidth: .infinity)
             }
-            
+
             if !post.caption.isEmpty {
                 Text(post.caption)
                     .font(.body)
@@ -78,7 +81,6 @@ struct PostCardView: View {
             }
 
             reactionRow
-                .padding(.horizontal, 16)
 
             if let interactionError {
                 Text(interactionError)
@@ -209,13 +211,31 @@ struct PostCardView: View {
                     }
                 }
             }
+
+            Button {
+                isTaggedPlantsSheetPresented = true
+            } label: {
+                Image(systemName: isTaggedPlantsSheetPresented ? "tag.fill" : "tag")
+                    .font(.title3)
+                    .foregroundStyle(isTaggedPlantsSheetPresented ? Color.accentColor : Color.primary)
+            }
+            .buttonStyle(.plain)
+            .disabled(taggedPlants.isEmpty)
+            .accessibilityLabel(taggedPlants.isEmpty ? "No plants tagged" : "Show tagged plants")
         }
+        .padding(.horizontal, 16)
         .frame(minHeight: 32)
         .sheet(isPresented: $isEmojiPickerPresented) {
             EmojiPickerSheet { emoji in
                 isEmojiPickerPresented = false
                 Task { _ = await setReaction(emoji) }
             }
+        }
+        .sheet(isPresented: $isTaggedPlantsSheetPresented) {
+            TaggedPlantsSheet(
+                plants: taggedPlants,
+                accessToken: sessionStore.accessToken
+            )
         }
     }
 
@@ -337,6 +357,10 @@ struct PostCardView: View {
         displayedReactions.filter { !$0.mine }
     }
 
+    private var taggedPlants: [PlantAccount] {
+        plants.filter { post.plantIds.contains($0.id) }
+    }
+
     private let heartEmoji = "❤️"
     private let heartEmojis = ["❤️", "❤", "♥️", "♥"]
 
@@ -370,6 +394,56 @@ private struct CommentRow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+    }
+}
+
+private struct TaggedPlantsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let plants: [PlantAccount]
+    let accessToken: String?
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3),
+                    spacing: 10
+                ) {
+                    ForEach(plants) { plant in
+                        HStack(spacing: 6) {
+                            PlantProfileImage(
+                                mediaID: plant.profileMediaId,
+                                accessToken: accessToken
+                            )
+
+                            Text(plant.name)
+                                .font(.caption.weight(.semibold))
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding(8)
+                        .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+                        .background(
+                            Color.secondary.opacity(0.10),
+                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        )
+                    }
+                }
+                .padding(16)
+            }
+            .navigationTitle("Tagged Plants")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 }
 

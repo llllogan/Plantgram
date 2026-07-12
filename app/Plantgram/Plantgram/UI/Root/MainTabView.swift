@@ -1,8 +1,7 @@
 import SwiftUI
 
 struct MainTabView: View {
-    @State private var isPresentingComposer = false
-    @State private var selectedPostType: PostType = .general
+    @State private var selectedPostType: PostType?
     @State private var feedRefreshID = 0
 
     var body: some View {
@@ -48,10 +47,10 @@ struct MainTabView: View {
                 Label("Profile", systemImage: "person.crop.circle")
             }
         }
-        .sheet(isPresented: $isPresentingComposer, onDismiss: {
+        .sheet(item: $selectedPostType, onDismiss: {
             feedRefreshID += 1
-        }) {
-            CreatePostView(postType: selectedPostType)
+        }) { postType in
+            CreatePostView(postType: postType)
         }
     }
 
@@ -60,7 +59,6 @@ struct MainTabView: View {
         ForEach(PostType.allCases) { type in
             Button {
                 selectedPostType = type
-                isPresentingComposer = true
             } label: {
                 Label(type.title, systemImage: type.systemImage)
             }
