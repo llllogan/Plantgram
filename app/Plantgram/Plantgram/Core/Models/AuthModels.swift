@@ -63,6 +63,11 @@ struct SetActiveHouseholdRequest: Encodable {
     let householdId: String
 }
 
+struct UpdateProfileRequest: Encodable {
+    let displayName: String
+    let profileMediaId: String?
+}
+
 struct ActiveHouseholdResponse: Decodable {
     let accessToken: String
     let tokenType: String

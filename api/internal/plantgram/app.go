@@ -290,8 +290,8 @@ func (a *App) handleMe(w http.ResponseWriter, r *http.Request) {
 func (a *App) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 	ac := authFrom(r)
 	var req struct {
-		DisplayName    string `json:"display_name"`
-		ProfileMediaID string `json:"profile_media_id"`
+		DisplayName    string  `json:"display_name"`
+		ProfileMediaID *string `json:"profile_media_id"`
 	}
 	if !readJSON(w, r, &req) {
 		return
@@ -301,21 +301,21 @@ func (a *App) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "display_name is required")
 		return
 	}
-	if req.ProfileMediaID != "" {
+	if req.ProfileMediaID != nil && *req.ProfileMediaID != "" {
 		if ac.HouseholdID == "" {
 			writeError(w, http.StatusForbidden, "active household required to set profile media")
 			return
 		}
-		if !a.mediaInHousehold(r.Context(), req.ProfileMediaID, ac.HouseholdID) {
+		if !a.mediaInHousehold(r.Context(), *req.ProfileMediaID, ac.HouseholdID) {
 			writeError(w, http.StatusBadRequest, "profile media not found in household")
 			return
 		}
 	}
-	if _, err := a.db.ExecContext(r.Context(), `UPDATE human_accounts SET display_name = ?, profile_media_id = NULLIF(?, ''), updated_at = ? WHERE id = ?`, req.DisplayName, req.ProfileMediaID, nowString(), ac.HumanID); err != nil {
+	if _, err := a.db.ExecContext(r.Context(), `UPDATE human_accounts SET display_name = ?, profile_media_id = NULLIF(COALESCE(?, profile_media_id), ''), updated_at = ? WHERE id = ?`, req.DisplayName, req.ProfileMediaID, nowString(), ac.HumanID); err != nil {
 		writeError(w, http.StatusInternalServerError, "update profile failed")
 		return
 	}
-	_, _ = a.db.ExecContext(r.Context(), `UPDATE actors SET display_name = ?, profile_media_id = NULLIF(?, '') WHERE human_id = ?`, req.DisplayName, req.ProfileMediaID, ac.HumanID)
+	_, _ = a.db.ExecContext(r.Context(), `UPDATE actors SET display_name = ?, profile_media_id = NULLIF(COALESCE(?, profile_media_id), '') WHERE human_id = ?`, req.DisplayName, req.ProfileMediaID, ac.HumanID)
 	a.handleMe(w, r)
 }
 

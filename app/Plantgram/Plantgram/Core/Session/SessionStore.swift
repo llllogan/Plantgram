@@ -25,6 +25,8 @@ final class SessionStore: ObservableObject {
     @Published private(set) var isCreatingHousehold = false
     @Published var authError: String?
     @Published var householdError: String?
+    @Published private(set) var usernameError: String?
+    @Published private(set) var isSavingUsername = false
     @Published private(set) var accountError: String?
     @Published private(set) var isDeletingAccount = false
 
@@ -51,7 +53,11 @@ final class SessionStore: ObservableObject {
     }
 
     var shouldShowHouseholdOnboarding: Bool {
-        householdState == .needsHousehold
+        householdState == .needsHousehold && !shouldShowUsernameOnboarding
+    }
+
+    var shouldShowUsernameOnboarding: Bool {
+        authState == .signedIn && currentUser?.displayName == "Plantgram User"
     }
 
     var hasActiveHousehold: Bool {
@@ -100,9 +106,14 @@ final class SessionStore: ObservableObject {
                 throw APIError.message("Apple did not return the required credentials.")
             }
 
-            let fullName = credential.fullName.map {
-                PersonNameComponentsFormatter().string(from: $0)
-            }
+            let fullName: String? = {
+                guard let components = credential.fullName,
+                      let givenName = components.givenName?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !givenName.isEmpty else {
+                    return nil
+                }
+                return PersonNameComponentsFormatter().string(from: components)
+            }()
             let response = try await authService.signInWithApple(
                 identityToken: identityToken,
                 authorizationCode: authorizationCode,
@@ -138,6 +149,7 @@ final class SessionStore: ObservableObject {
         }
 
         householdError = nil
+        usernameError = nil
         isCreatingHousehold = true
         defer { isCreatingHousehold = false }
 
@@ -149,6 +161,30 @@ final class SessionStore: ObservableObject {
             await refreshAccountState()
         } catch {
             householdError = error.localizedDescription
+        }
+    }
+
+    func savePlantgramUsername(_ name: String) async {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else {
+            usernameError = "A Plantgram username is required."
+            return
+        }
+        guard let accessToken else {
+            usernameError = "Log in again before choosing your username."
+            return
+        }
+
+        usernameError = nil
+        isSavingUsername = true
+        defer { isSavingUsername = false }
+
+        do {
+            let response = try await accountService.updateProfile(displayName: trimmedName, accessToken: accessToken)
+            currentUser = response.human
+            storeCurrentUser()
+        } catch {
+            usernameError = error.localizedDescription
         }
     }
 
@@ -164,6 +200,7 @@ final class SessionStore: ObservableObject {
         currentUser = nil
         authError = nil
         householdError = nil
+        usernameError = nil
         accountError = nil
         householdState = .unknown
         authState = .signedOut

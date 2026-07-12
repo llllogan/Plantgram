@@ -52,6 +52,13 @@ final class APIClient {
         return try await send(request)
     }
 
+    func patch<Body: Encodable, Response: Decodable>(_ path: String, body: Body, accessToken: String? = nil) async throws -> Response {
+        var request = try makeRequest(path: path, method: "PATCH", accessToken: accessToken)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(body)
+        return try await send(request)
+    }
+
     func delete(_ path: String, accessToken: String? = nil) async throws {
         let request = try makeRequest(path: path, method: "DELETE", accessToken: accessToken)
         try await sendWithoutBody(request)

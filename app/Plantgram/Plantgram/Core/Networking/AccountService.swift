@@ -6,6 +6,7 @@ struct AccountService: Sendable {
     var createHouseholdHandler: @Sendable (_ name: String, _ accessToken: String) async throws -> CreateHouseholdResponse
     var setActiveHouseholdHandler: @Sendable (_ householdID: String, _ accessToken: String) async throws -> ActiveHouseholdResponse
     var deleteAccountHandler: @Sendable (_ accessToken: String) async throws -> Void
+    var updateProfileHandler: @Sendable (_ displayName: String, _ accessToken: String) async throws -> MeResponse
 
     func fetchMe(accessToken: String) async throws -> MeResponse {
         try await fetchMeHandler(accessToken)
@@ -25,6 +26,10 @@ struct AccountService: Sendable {
 
     func deleteAccount(accessToken: String) async throws {
         try await deleteAccountHandler(accessToken)
+    }
+
+    func updateProfile(displayName: String, accessToken: String) async throws -> MeResponse {
+        try await updateProfileHandler(displayName, accessToken)
     }
 
     static let live = AccountService(
@@ -51,6 +56,13 @@ struct AccountService: Sendable {
         },
         deleteAccountHandler: { accessToken in
             try await APIClient.live.delete("/me/account", accessToken: accessToken)
+        },
+        updateProfileHandler: { displayName, accessToken in
+            try await APIClient.live.patch(
+                "/me",
+                body: UpdateProfileRequest(displayName: displayName, profileMediaId: nil),
+                accessToken: accessToken
+            )
         }
     )
 
@@ -73,6 +85,12 @@ struct AccountService: Sendable {
         setActiveHouseholdHandler: { _, _ in
             ActiveHouseholdResponse(accessToken: "preview-access", tokenType: "Bearer")
         },
-        deleteAccountHandler: { _ in }
+        deleteAccountHandler: { _ in },
+        updateProfileHandler: { displayName, _ in
+            MeResponse(
+                human: CurrentUser(id: "hum_preview", email: "logan@example.com", displayName: displayName),
+                activeHouseholdId: nil
+            )
+        }
     )
 }
