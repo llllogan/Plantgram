@@ -59,7 +59,7 @@ final class CreatePostViewModel: ObservableObject {
         previewImage = nil
     }
 
-    func create(accessToken: String?) async -> Bool {
+    func create(accessToken: String?, plantIDs: [String] = []) async -> Bool {
         guard let accessToken else {
             message = "Log in again before posting."
             return false
@@ -73,6 +73,7 @@ final class CreatePostViewModel: ObservableObject {
                 caption: caption.trimmingCharacters(in: .whitespacesAndNewlines),
                 postType: postType,
                 imageData: selectedImageData,
+                plantIDs: plantIDs,
                 accessToken: accessToken
             )
             return true

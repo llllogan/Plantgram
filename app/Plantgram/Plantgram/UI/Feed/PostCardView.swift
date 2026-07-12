@@ -70,15 +70,15 @@ struct PostCardView: View {
                 AuthenticatedRemoteImage(url: imageUrl, accessToken: sessionStore.accessToken)
                     .frame(maxWidth: .infinity)
             }
-
-            reactionRow
-                .padding(.horizontal, 16)
             
             if !post.caption.isEmpty {
                 Text(post.caption)
                     .font(.body)
                     .padding(.horizontal, 16)
             }
+
+            reactionRow
+                .padding(.horizontal, 16)
 
             if let interactionError {
                 Text(interactionError)

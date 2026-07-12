@@ -2,7 +2,7 @@ import Foundation
 
 struct PostService: Sendable {
     var fetchFeedHandler: @Sendable (_ accessToken: String, _ cursor: String?, _ limit: Int) async throws -> FeedResponse
-    var createPostHandler: @Sendable (_ caption: String, _ postType: PostType, _ imageData: Data?, _ accessToken: String) async throws -> FeedPost
+    var createPostHandler: @Sendable (_ caption: String, _ postType: PostType, _ imageData: Data?, _ plantIDs: [String], _ accessToken: String) async throws -> FeedPost
     var fetchCommentsHandler: @Sendable (_ postID: String, _ accessToken: String) async throws -> [PostComment]
     var addReactionHandler: @Sendable (_ postID: String, _ emoji: String, _ accessToken: String) async throws -> Void
     var removeReactionHandler: @Sendable (_ postID: String, _ emoji: String, _ accessToken: String) async throws -> Void
@@ -12,8 +12,8 @@ struct PostService: Sendable {
         try await fetchFeedHandler(accessToken, cursor, limit)
     }
 
-    func createPost(caption: String, postType: PostType, imageData: Data?, accessToken: String) async throws -> FeedPost {
-        try await createPostHandler(caption, postType, imageData, accessToken)
+    func createPost(caption: String, postType: PostType, imageData: Data?, plantIDs: [String], accessToken: String) async throws -> FeedPost {
+        try await createPostHandler(caption, postType, imageData, plantIDs, accessToken)
     }
 
     func fetchComments(postID: String, accessToken: String) async throws -> [PostComment] {
@@ -41,7 +41,7 @@ struct PostService: Sendable {
             }
             return try await APIClient.live.get(path, accessToken: accessToken)
         },
-        createPostHandler: { caption, postType, imageData, accessToken in
+        createPostHandler: { caption, postType, imageData, plantIDs, accessToken in
             var imageMediaID: String?
             if let imageData {
                 let upload = try await APIClient.live.uploadImage(
@@ -59,7 +59,7 @@ struct PostService: Sendable {
                     postType: postType,
                     caption: caption,
                     imageMediaId: imageMediaID,
-                    plantIds: [],
+                    plantIds: plantIDs,
                     planterIds: []
                 ),
                 accessToken: accessToken

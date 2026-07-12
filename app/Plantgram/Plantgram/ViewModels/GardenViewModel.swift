@@ -32,7 +32,7 @@ final class GardenViewModel: ObservableObject {
         }
     }
 
-    func createPlant(name: String, species: String, notes: String, accessToken: String?) async -> Bool {
+    func createPlant(name: String, species: String, notes: String, imageData: Data? = nil, accessToken: String?) async -> Bool {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else {
             message = "Plant name is required."
@@ -51,6 +51,7 @@ final class GardenViewModel: ObservableObject {
                 name: trimmedName,
                 species: species.trimmingCharacters(in: .whitespacesAndNewlines),
                 notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
+                imageData: imageData,
                 accessToken: accessToken
             )
             await load(accessToken: accessToken)

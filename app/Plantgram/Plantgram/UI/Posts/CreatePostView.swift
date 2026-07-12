@@ -8,9 +8,15 @@ struct CreatePostView: View {
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var isShowingLibrary = false
     @State private var isShowingCamera = false
+    @State private var plants: [PlantAccount] = []
+    @State private var selectedPlantIDs = Set<String>()
+    @State private var plantLoadingError: String?
 
-    init(postType: PostType = .general) {
+    private let plantService: PlantService
+
+    init(postType: PostType = .general, plantService: PlantService = .live) {
         _viewModel = StateObject(wrappedValue: CreatePostViewModel(postType: postType))
+        self.plantService = plantService
     }
 
     var body: some View {
@@ -26,6 +32,28 @@ struct CreatePostView: View {
                             .frame(minHeight: 96, alignment: .top)
                     }
                     .padding(.vertical, 8)
+                }
+
+                Section("Tag Plants") {
+                    if let plantLoadingError {
+                        Text(plantLoadingError)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    } else if plants.isEmpty {
+                        Text("No plants in this household yet.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        LazyVGrid(
+                            columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3),
+                            spacing: 10
+                        ) {
+                            ForEach(plants) { plant in
+                                plantTagButton(plant)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
                 }
 
                 if let message = viewModel.message {
@@ -47,7 +75,10 @@ struct CreatePostView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Post") {
                         Task {
-                            let didCreate = await viewModel.create(accessToken: sessionStore.accessToken)
+                            let didCreate = await viewModel.create(
+                                accessToken: sessionStore.accessToken,
+                                plantIDs: Array(selectedPlantIDs)
+                            )
                             if didCreate {
                                 dismiss()
                             }
@@ -55,6 +86,7 @@ struct CreatePostView: View {
                     }
                     .disabled(viewModel.isPosting || !viewModel.canPost)
                 }
+
             }
             .photosPicker(
                 isPresented: $isShowingLibrary,
@@ -65,6 +97,9 @@ struct CreatePostView: View {
                 Task {
                     await viewModel.loadImage(from: newValue)
                 }
+            }
+            .task(id: sessionStore.activeHousehold?.id ?? "none") {
+                await loadPlants()
             }
             .sheet(isPresented: $isShowingCamera) {
                 CameraImagePicker { data in
@@ -134,7 +169,121 @@ struct CreatePostView: View {
                 }
         }
     }
+
+    private func plantTagButton(_ plant: PlantAccount) -> some View {
+        let isSelected = selectedPlantIDs.contains(plant.id)
+
+        return Button {
+            if isSelected {
+                selectedPlantIDs.remove(plant.id)
+            } else {
+                selectedPlantIDs.insert(plant.id)
+            }
+        } label: {
+            HStack(spacing: 6) {
+                PlantProfileImage(
+                    mediaID: plant.profileMediaId,
+                    accessToken: sessionStore.accessToken
+                )
+
+                Text(plant.name)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.body)
+                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
+            .background(
+                isSelected ? Color.accentColor.opacity(0.14) : Color.secondary.opacity(0.10),
+                in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Tag \(plant.name)")
+        .accessibilityValue(isSelected ? "Selected" : "Not selected")
+    }
+
+    private func loadPlants() async {
+        guard let accessToken = sessionStore.accessToken else { return }
+
+        do {
+            plants = try await plantService.fetchPlants(accessToken: accessToken)
+            plantLoadingError = nil
+        } catch {
+            plants = []
+            plantLoadingError = error.localizedDescription
+        }
+    }
 }
+
+#if canImport(UIKit)
+private struct PlantProfileImage: View {
+    let mediaID: String?
+    let accessToken: String?
+
+    @State private var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Image(systemName: "leaf.fill")
+                    .foregroundStyle(.green)
+            }
+        }
+        .frame(width: 32, height: 32)
+        .background(.green.opacity(0.14))
+        .clipShape(Circle())
+        .task(id: "\(mediaID ?? "none")-\(accessToken ?? "")") {
+            await load()
+        }
+    }
+
+    private func load() async {
+        guard let mediaID,
+              let url = URL(string: "/media/\(mediaID)", relativeTo: APIClient.live.baseURL)?.absoluteURL else {
+            return
+        }
+
+        do {
+            var request = URLRequest(url: url)
+            if let accessToken {
+                request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+            }
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200..<300).contains(httpResponse.statusCode),
+                  let loadedImage = UIImage(data: data) else {
+                return
+            }
+            image = loadedImage
+        } catch {
+            // Keep the leaf placeholder when a profile image cannot be loaded.
+        }
+    }
+}
+#else
+private struct PlantProfileImage: View {
+    let mediaID: String?
+    let accessToken: String?
+
+    var body: some View {
+        Image(systemName: "leaf.fill")
+            .foregroundStyle(.green)
+            .frame(width: 32, height: 32)
+            .background(.green.opacity(0.14))
+            .clipShape(Circle())
+    }
+}
+#endif
 
 #if canImport(UIKit)
 private struct CameraImagePicker: UIViewControllerRepresentable {
