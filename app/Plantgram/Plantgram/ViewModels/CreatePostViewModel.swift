@@ -17,7 +17,8 @@ final class CreatePostViewModel: ObservableObject {
         !caption.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || selectedImageData != nil
     }
 
-    init(postService: PostService = .live) {
+    init(postType: PostType = .general, postService: PostService = .live) {
+        self.postType = postType
         self.postService = postService
     }
 
@@ -42,6 +43,20 @@ final class CreatePostViewModel: ObservableObject {
         } catch {
             message = error.localizedDescription
         }
+    }
+
+    func loadImage(data: Data) {
+        selectedImageData = data
+        #if canImport(UIKit)
+        if let uiImage = UIImage(data: data) {
+            previewImage = Image(uiImage: uiImage)
+        }
+        #endif
+    }
+
+    func clearImage() {
+        selectedImageData = nil
+        previewImage = nil
     }
 
     func create(accessToken: String?) async -> Bool {

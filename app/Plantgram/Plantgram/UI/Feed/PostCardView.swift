@@ -58,10 +58,11 @@ struct PostCardView: View {
             .padding(.horizontal, 16)
 
             if let previewImage {
-                previewImage
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity)
+                PostMediaFrame {
+                    previewImage
+                        .resizable()
+                        .scaledToFit()
+                }
             } else if let imageUrl = resolvedImageURL {
                 
                 VStack(alignment: .leading) {
@@ -381,9 +382,27 @@ private struct CommentRow: View {
     }
 }
 
+private struct PostMediaFrame<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        ZStack {
+            Color.secondary.opacity(0.08)
+            content
+        }
+        .frame(maxWidth: .infinity)
+        .aspectRatio(4 / 3, contentMode: .fit)
+        .clipped()
+    }
+}
+
 #if canImport(UIKit)
 private struct AuthenticatedRemoteImage: View {
-    private static let imageCache = NSCache<NSURL, UIImage>()
+    private static let imageCache: NSCache<NSURL, UIImage> = {
+        let cache = NSCache<NSURL, UIImage>()
+        cache.countLimit = 100
+        return cache
+    }()
 
     let url: URL
     let accessToken: String?
@@ -392,22 +411,21 @@ private struct AuthenticatedRemoteImage: View {
     @State private var didFail = false
 
     var body: some View {
-        Group {
+        PostMediaFrame {
             if let image {
                 Image(uiImage: image)
                     .resizable()
-                    .aspectRatio(image.size, contentMode: .fit)
-                    .frame(maxWidth: .infinity)
+                    .scaledToFit()
+                    .transition(.opacity)
             } else if didFail {
                 Image(systemName: "photo")
                     .font(.largeTitle)
                     .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 220)
             } else {
                 ProgressView()
-                    .frame(maxWidth: .infinity, minHeight: 220)
             }
         }
+        .animation(.easeInOut(duration: 0.2), value: image != nil)
         .task(id: "\(url.absoluteString)-\(accessToken ?? "")") {
             await load()
         }

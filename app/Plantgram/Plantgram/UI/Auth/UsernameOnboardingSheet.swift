@@ -17,7 +17,7 @@ struct UsernameOnboardingSheet: View {
                         Text("Choose your Plantgram username")
                             .font(.title2.bold())
                             .multilineTextAlignment(.center)
-                        Text("Apple did not provide your first name. Choose the name you would like people in your household to see.")
+                        Text("Choose the name you would like people in your household to see.")
                             .font(.body)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MainTabView: View {
     @State private var isPresentingComposer = false
+    @State private var selectedPostType: PostType = .general
     @State private var feedRefreshID = 0
 
     var body: some View {
@@ -10,12 +11,12 @@ struct MainTabView: View {
                 FeedView(refreshID: feedRefreshID)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
-                            Button {
-                                isPresentingComposer = true
+                            Menu {
+                                postTypeMenu
                             } label: {
                                 Image(systemName: "plus")
                             }
-                            .accessibilityLabel("New Post")
+                            .accessibilityLabel("Choose post type")
                         }
                     }
             }
@@ -34,12 +35,12 @@ struct MainTabView: View {
                 ProfileView()
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
-                            Button {
-                                isPresentingComposer = true
+                            Menu {
+                                postTypeMenu
                             } label: {
                                 Image(systemName: "plus")
                             }
-                            .accessibilityLabel("New Post")
+                            .accessibilityLabel("Choose post type")
                         }
                     }
             }
@@ -50,7 +51,19 @@ struct MainTabView: View {
         .sheet(isPresented: $isPresentingComposer, onDismiss: {
             feedRefreshID += 1
         }) {
-            CreatePostView()
+            CreatePostView(postType: selectedPostType)
+        }
+    }
+
+    @ViewBuilder
+    private var postTypeMenu: some View {
+        ForEach(PostType.allCases) { type in
+            Button {
+                selectedPostType = type
+                isPresentingComposer = true
+            } label: {
+                Label(type.title, systemImage: type.systemImage)
+            }
         }
     }
 }
