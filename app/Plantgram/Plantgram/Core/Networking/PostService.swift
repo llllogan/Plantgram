@@ -2,7 +2,7 @@ import Foundation
 
 struct PostService: Sendable {
     var fetchFeedHandler: @Sendable (_ accessToken: String, _ cursor: String?, _ limit: Int) async throws -> FeedResponse
-    var createPostHandler: @Sendable (_ caption: String, _ postType: PostType, _ imageData: Data?, _ plantIDs: [String], _ accessToken: String) async throws -> FeedPost
+    var createPostHandler: @Sendable (_ caption: String, _ postType: PostType, _ imageData: Data?, _ plantIDs: [String], _ imageMediaID: String?, _ accessToken: String) async throws -> FeedPost
     var fetchCommentsHandler: @Sendable (_ postID: String, _ accessToken: String) async throws -> [PostComment]
     var addReactionHandler: @Sendable (_ postID: String, _ emoji: String, _ accessToken: String) async throws -> Void
     var removeReactionHandler: @Sendable (_ postID: String, _ emoji: String, _ accessToken: String) async throws -> Void
@@ -12,8 +12,8 @@ struct PostService: Sendable {
         try await fetchFeedHandler(accessToken, cursor, limit)
     }
 
-    func createPost(caption: String, postType: PostType, imageData: Data?, plantIDs: [String], accessToken: String) async throws -> FeedPost {
-        try await createPostHandler(caption, postType, imageData, plantIDs, accessToken)
+    func createPost(caption: String, postType: PostType, imageData: Data?, plantIDs: [String], imageMediaID: String? = nil, accessToken: String) async throws -> FeedPost {
+        try await createPostHandler(caption, postType, imageData, plantIDs, imageMediaID, accessToken)
     }
 
     func fetchComments(postID: String, accessToken: String) async throws -> [PostComment] {
@@ -41,16 +41,16 @@ struct PostService: Sendable {
             }
             return try await APIClient.live.get(path, accessToken: accessToken)
         },
-        createPostHandler: { caption, postType, imageData, plantIDs, accessToken in
-            var imageMediaID: String?
-            if let imageData {
+        createPostHandler: { caption, postType, imageData, plantIDs, imageMediaID, accessToken in
+            var resolvedImageMediaID = imageMediaID
+            if resolvedImageMediaID == nil, let imageData {
                 let upload = try await APIClient.live.uploadImage(
                     imageData,
                     fileName: "post.jpg",
                     mimeType: "image/jpeg",
                     accessToken: accessToken
                 )
-                imageMediaID = upload.media.id
+                resolvedImageMediaID = upload.media.id
             }
 
             let response: CreatePostResponse = try await APIClient.live.post(
@@ -58,7 +58,7 @@ struct PostService: Sendable {
                 body: CreatePostRequest(
                     postType: postType,
                     caption: caption,
-                    imageMediaId: imageMediaID,
+                    imageMediaId: resolvedImageMediaID,
                     plantIds: plantIDs,
                     planterIds: []
                 ),

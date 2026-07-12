@@ -602,7 +602,18 @@ func (a *App) handleCreatePlant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "create plant failed")
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"plant": map[string]string{"id": id, "actor_id": actorID, "name": req.Name, "species": req.Species, "notes": req.Notes}})
+	var profileMedia any
+	if req.ProfileMediaID != "" {
+		profileMedia = req.ProfileMediaID
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"plant": map[string]any{
+		"id":               id,
+		"actor_id":         actorID,
+		"name":             req.Name,
+		"species":          req.Species,
+		"notes":            req.Notes,
+		"profile_media_id": profileMedia,
+	}})
 }
 
 func (a *App) handleListPlants(w http.ResponseWriter, r *http.Request) {

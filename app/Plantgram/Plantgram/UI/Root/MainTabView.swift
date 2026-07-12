@@ -11,7 +11,7 @@ struct MainTabView: View {
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
                             Menu {
-                                postTypeMenu
+                                postTypeMenu(includePlanting: false)
                             } label: {
                                 Image(systemName: "plus")
                             }
@@ -35,7 +35,7 @@ struct MainTabView: View {
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
                             Menu {
-                                postTypeMenu
+                                postTypeMenu(includePlanting: true)
                             } label: {
                                 Image(systemName: "plus")
                             }
@@ -55,8 +55,8 @@ struct MainTabView: View {
     }
 
     @ViewBuilder
-    private var postTypeMenu: some View {
-        ForEach(PostType.allCases) { type in
+    private func postTypeMenu(includePlanting: Bool) -> some View {
+        ForEach(PostType.allCases.filter { includePlanting || $0 != .plantingEvent }) { type in
             Button {
                 selectedPostType = type
             } label: {

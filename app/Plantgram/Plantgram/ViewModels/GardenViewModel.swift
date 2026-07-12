@@ -9,9 +9,11 @@ final class GardenViewModel: ObservableObject {
     @Published var message: String?
 
     private let plantService: PlantService
+    private let postService: PostService
 
-    init(plantService: PlantService = .live) {
+    init(plantService: PlantService = .live, postService: PostService = .live) {
         self.plantService = plantService
+        self.postService = postService
     }
 
     func load(accessToken: String?) async {
@@ -47,13 +49,27 @@ final class GardenViewModel: ObservableObject {
         defer { isCreating = false }
 
         do {
-            _ = try await plantService.createPlant(
+            let plant = try await plantService.createPlant(
                 name: trimmedName,
                 species: species.trimmingCharacters(in: .whitespacesAndNewlines),
                 notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
                 imageData: imageData,
                 accessToken: accessToken
             )
+
+            do {
+                _ = try await postService.createPost(
+                    caption: "Say hello to \(plant.name)",
+                    postType: .plantingEvent,
+                    imageData: nil,
+                    plantIDs: [plant.id],
+                    imageMediaID: plant.profileMediaId,
+                    accessToken: accessToken
+                )
+            } catch {
+                message = "Plant added, but the feed post could not be created."
+            }
+
             await load(accessToken: accessToken)
             return true
         } catch {

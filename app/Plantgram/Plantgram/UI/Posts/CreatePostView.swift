@@ -77,7 +77,8 @@ struct CreatePostView: View {
                         Task {
                             let didCreate = await viewModel.create(
                                 accessToken: sessionStore.accessToken,
-                                plantIDs: Array(selectedPlantIDs)
+                                plantIDs: Array(selectedPlantIDs),
+                                imageMediaID: nil
                             )
                             if didCreate {
                                 dismiss()
