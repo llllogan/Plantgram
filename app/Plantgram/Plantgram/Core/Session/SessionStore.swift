@@ -25,6 +25,8 @@ final class SessionStore: ObservableObject {
     @Published private(set) var isCreatingHousehold = false
     @Published var authError: String?
     @Published var householdError: String?
+    @Published private(set) var accountError: String?
+    @Published private(set) var isDeletingAccount = false
 
     private let authService: AuthService
     private let accountService: AccountService
@@ -162,8 +164,27 @@ final class SessionStore: ObservableObject {
         currentUser = nil
         authError = nil
         householdError = nil
+        accountError = nil
         householdState = .unknown
         authState = .signedOut
+    }
+
+    func deleteAccount() async {
+        guard let accessToken else {
+            accountError = "Log in again before deleting your account."
+            return
+        }
+
+        accountError = nil
+        isDeletingAccount = true
+        defer { isDeletingAccount = false }
+
+        do {
+            try await accountService.deleteAccount(accessToken: accessToken)
+            signOut()
+        } catch {
+            accountError = error.localizedDescription
+        }
     }
 
     func refreshAccessToken() async throws -> String? {

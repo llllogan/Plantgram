@@ -109,6 +109,7 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("POST /auth/logout", a.requireAuth(a.handleLogout, false))
 	mux.HandleFunc("GET /me", a.requireAuth(a.handleMe, false))
 	mux.HandleFunc("PATCH /me", a.requireAuth(a.handleUpdateMe, false))
+	mux.HandleFunc("DELETE /me/account", a.requireAuth(a.handleDeleteAccount, false))
 
 	mux.HandleFunc("POST /households", a.requireAuth(a.handleCreateHousehold, false))
 	mux.HandleFunc("GET /households", a.requireAuth(a.handleListHouseholds, false))
@@ -316,6 +317,124 @@ func (a *App) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 	}
 	_, _ = a.db.ExecContext(r.Context(), `UPDATE actors SET display_name = ?, profile_media_id = NULLIF(?, '') WHERE human_id = ?`, req.DisplayName, req.ProfileMediaID, ac.HumanID)
 	a.handleMe(w, r)
+}
+
+func (a *App) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
+	ac := authFrom(r)
+	tx, err := a.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "begin account deletion failed")
+		return
+	}
+	defer tx.Rollback()
+
+	type membership struct {
+		householdID string
+		role        string
+	}
+	rows, err := tx.QueryContext(r.Context(), `SELECT household_id, role FROM household_members WHERE human_id = ?`, ac.HumanID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "load household memberships failed")
+		return
+	}
+	var memberships []membership
+	for rows.Next() {
+		var item membership
+		if err := rows.Scan(&item.householdID, &item.role); err != nil {
+			rows.Close()
+			writeError(w, http.StatusInternalServerError, "load household memberships failed")
+			return
+		}
+		memberships = append(memberships, item)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		writeError(w, http.StatusInternalServerError, "load household memberships failed")
+		return
+	}
+	rows.Close()
+
+	deletedHouseholds := map[string]bool{}
+	for _, item := range memberships {
+		if item.role != "owner" {
+			continue
+		}
+
+		var remaining int
+		if err := tx.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM household_members WHERE household_id = ? AND human_id <> ?`, item.householdID, ac.HumanID).Scan(&remaining); err != nil {
+			writeError(w, http.StatusInternalServerError, "inspect household membership failed")
+			return
+		}
+		if remaining == 0 {
+			deletedHouseholds[item.householdID] = true
+			continue
+		}
+
+		var replacementID string
+		if err := tx.QueryRowContext(r.Context(), `SELECT human_id FROM household_members WHERE household_id = ? AND human_id <> ? ORDER BY joined_at, human_id LIMIT 1`, item.householdID, ac.HumanID).Scan(&replacementID); err != nil {
+			writeError(w, http.StatusInternalServerError, "choose household owner failed")
+			return
+		}
+		if _, err := tx.ExecContext(r.Context(), `UPDATE households SET created_by_human_id = ?, updated_at = ? WHERE id = ?`, replacementID, nowString(), item.householdID); err != nil {
+			writeError(w, http.StatusInternalServerError, "transfer household ownership failed")
+			return
+		}
+		if _, err := tx.ExecContext(r.Context(), `UPDATE household_members SET role = 'member' WHERE household_id = ? AND human_id = ?`, item.householdID, ac.HumanID); err != nil {
+			writeError(w, http.StatusInternalServerError, "update household ownership failed")
+			return
+		}
+		if _, err := tx.ExecContext(r.Context(), `UPDATE household_members SET role = 'owner' WHERE household_id = ? AND human_id = ?`, item.householdID, replacementID); err != nil {
+			writeError(w, http.StatusInternalServerError, "update household ownership failed")
+			return
+		}
+	}
+
+	// Remove all user-authored discussion content before deleting the account.
+	if _, err := tx.ExecContext(r.Context(), `DELETE FROM post_comments WHERE human_id = ?`, ac.HumanID); err != nil {
+		writeError(w, http.StatusInternalServerError, "delete comments failed")
+		return
+	}
+	if _, err := tx.ExecContext(r.Context(), `DELETE FROM posts WHERE created_by_human_id = ?`, ac.HumanID); err != nil {
+		writeError(w, http.StatusInternalServerError, "delete posts failed")
+		return
+	}
+
+	for _, item := range memberships {
+		if deletedHouseholds[item.householdID] {
+			if _, err := tx.ExecContext(r.Context(), `DELETE FROM households WHERE id = ?`, item.householdID); err != nil {
+				writeError(w, http.StatusInternalServerError, "delete household failed")
+				return
+			}
+			continue
+		}
+
+		var replacementID string
+		if err := tx.QueryRowContext(r.Context(), `SELECT human_id FROM household_members WHERE household_id = ? AND human_id <> ? ORDER BY role = 'owner' DESC, joined_at, human_id LIMIT 1`, item.householdID, ac.HumanID).Scan(&replacementID); err != nil {
+			writeError(w, http.StatusInternalServerError, "choose ownership replacement failed")
+			return
+		}
+		for _, query := range []string{
+			`UPDATE plant_accounts SET created_by_human_id = ? WHERE household_id = ? AND created_by_human_id = ?`,
+			`UPDATE planters SET created_by_human_id = ? WHERE household_id = ? AND created_by_human_id = ?`,
+			`UPDATE media_assets SET uploaded_by_human_id = ? WHERE household_id = ? AND uploaded_by_human_id = ?`,
+			`UPDATE planter_plants SET added_by_human_id = ? WHERE planter_id IN (SELECT id FROM planters WHERE household_id = ?) AND added_by_human_id = ?`,
+		} {
+			if _, err := tx.ExecContext(r.Context(), query, replacementID, item.householdID, ac.HumanID); err != nil {
+				writeError(w, http.StatusInternalServerError, "transfer household content ownership failed")
+				return
+			}
+		}
+	}
+
+	if _, err := tx.ExecContext(r.Context(), `DELETE FROM human_accounts WHERE id = ?`, ac.HumanID); err != nil {
+		writeError(w, http.StatusInternalServerError, "delete account failed")
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		writeError(w, http.StatusInternalServerError, "delete account failed")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (a *App) writeAuthResponse(w http.ResponseWriter, r *http.Request, humanID, householdID string) {
@@ -867,9 +986,10 @@ func (a *App) writePostList(w http.ResponseWriter, r *http.Request, query string
 		}
 		posts = append(posts, p)
 	}
-	var nextCursor string
-	if len(posts) > 0 {
-		nextCursor = posts[len(posts)-1].OccurredAt
+	var nextCursor *string
+	if len(posts) == limit(r) && len(posts) > 0 {
+		cursor := posts[len(posts)-1].OccurredAt
+		nextCursor = &cursor
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"posts": posts, "next_cursor": nextCursor})
 }

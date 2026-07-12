@@ -20,6 +20,19 @@ enum PostType: String, Codable, CaseIterable, Identifiable {
             "Status"
         }
     }
+
+    var systemImage: String {
+        switch self {
+        case .general:
+            "text.bubble.fill"
+        case .wateringEvent:
+            "drop.fill"
+        case .plantingEvent:
+            "leaf.fill"
+        case .statusUpdate:
+            "megaphone.fill"
+        }
+    }
 }
 
 struct FeedResponse: Decodable {

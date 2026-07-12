@@ -20,8 +20,21 @@ struct FeedView: View {
                     PostCardView(post: post)
                         .listRowSeparator(.hidden)
                         .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 8, trailing: 0))
+                        .onAppear {
+                            guard post.id == viewModel.posts.last?.id else { return }
+                            Task {
+                                await viewModel.loadNextPage(accessToken: sessionStore.accessToken)
+                            }
+                        }
                 }
                 .listStyle(.plain)
+                .overlay(alignment: .bottom) {
+                    if viewModel.isLoading {
+                        ProgressView()
+                            .padding(.vertical, 8)
+                            .background(.regularMaterial, in: Capsule())
+                    }
+                }
                 .refreshable {
                     if sessionStore.hasActiveHousehold {
                         await viewModel.load(accessToken: sessionStore.accessToken)

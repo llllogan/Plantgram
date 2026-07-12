@@ -5,6 +5,7 @@ struct AccountService: Sendable {
     var listHouseholdsHandler: @Sendable (_ accessToken: String) async throws -> [Household]
     var createHouseholdHandler: @Sendable (_ name: String, _ accessToken: String) async throws -> CreateHouseholdResponse
     var setActiveHouseholdHandler: @Sendable (_ householdID: String, _ accessToken: String) async throws -> ActiveHouseholdResponse
+    var deleteAccountHandler: @Sendable (_ accessToken: String) async throws -> Void
 
     func fetchMe(accessToken: String) async throws -> MeResponse {
         try await fetchMeHandler(accessToken)
@@ -20,6 +21,10 @@ struct AccountService: Sendable {
 
     func setActiveHousehold(_ householdID: String, accessToken: String) async throws -> ActiveHouseholdResponse {
         try await setActiveHouseholdHandler(householdID, accessToken)
+    }
+
+    func deleteAccount(accessToken: String) async throws {
+        try await deleteAccountHandler(accessToken)
     }
 
     static let live = AccountService(
@@ -43,6 +48,9 @@ struct AccountService: Sendable {
                 body: SetActiveHouseholdRequest(householdId: householdID),
                 accessToken: accessToken
             )
+        },
+        deleteAccountHandler: { accessToken in
+            try await APIClient.live.delete("/me/account", accessToken: accessToken)
         }
     )
 
@@ -64,6 +72,7 @@ struct AccountService: Sendable {
         },
         setActiveHouseholdHandler: { _, _ in
             ActiveHouseholdResponse(accessToken: "preview-access", tokenType: "Bearer")
-        }
+        },
+        deleteAccountHandler: { _ in }
     )
 }

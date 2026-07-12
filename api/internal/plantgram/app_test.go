@@ -94,6 +94,80 @@ func TestCorePlantgramFlow(t *testing.T) {
 	}
 }
 
+func TestDeleteAccountTransfersOrDeletesHouseholds(t *testing.T) {
+	tmp := t.TempDir()
+	app, err := New(Config{
+		Addr:            ":0",
+		DBPath:          filepath.Join(tmp, "plantgram.db"),
+		MediaDir:        filepath.Join(tmp, "media"),
+		JWTSecret:       "test-secret",
+		AccessTokenTTL:  LoadConfig().AccessTokenTTL,
+		RefreshTokenTTL: LoadConfig().RefreshTokenTTL,
+		DBMaxOpenConns:  4,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(func() { _ = app.Close() })
+	handler := app.Routes()
+
+	ownerID, err := app.findOrCreateAppleHuman(t.Context(), "apple-owner", "owner@example.com", "Owner")
+	if err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+	memberID, err := app.findOrCreateAppleHuman(t.Context(), "apple-member", "member@example.com", "Member")
+	if err != nil {
+		t.Fatalf("create member: %v", err)
+	}
+	ownerToken, _ := app.createAccessToken(ownerID, "")
+	memberToken, _ := app.createAccessToken(memberID, "")
+	household := doJSON(t, handler, http.MethodPost, "/households", ownerToken, map[string]any{"name": "Shared Home"})
+	householdID := household["household"].(map[string]any)["id"].(string)
+	doJSON(t, handler, http.MethodPost, "/households/"+householdID+"/join", memberToken, nil)
+
+	plantResp := doJSON(t, handler, http.MethodPost, "/plants", household["access_token"].(string), map[string]any{
+		"name": "Fern",
+	})
+	plant := plantResp["plant"].(map[string]any)
+	postResp := doJSON(t, handler, http.MethodPost, "/posts", household["access_token"].(string), map[string]any{
+		"author_actor_id": plant["actor_id"],
+		"post_type":       "general",
+		"caption":         "Owner post",
+	})
+	postID := postResp["post"].(map[string]any)["id"].(string)
+	doJSON(t, handler, http.MethodPost, "/posts/"+postID+"/comments", household["access_token"].(string), map[string]any{"body": "Owner comment"})
+
+	doJSON(t, handler, http.MethodDelete, "/me/account", household["access_token"].(string), nil)
+
+	var role string
+	if err := app.db.QueryRow(`SELECT role FROM household_members WHERE household_id = ? AND human_id = ?`, householdID, memberID).Scan(&role); err != nil {
+		t.Fatalf("member membership missing: %v", err)
+	}
+	if role != "owner" {
+		t.Fatalf("member role = %q, want owner", role)
+	}
+	var postCount, commentCount int
+	if err := app.db.QueryRow(`SELECT COUNT(*) FROM posts WHERE created_by_human_id = ?`, ownerID).Scan(&postCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.db.QueryRow(`SELECT COUNT(*) FROM post_comments WHERE human_id = ?`, ownerID).Scan(&commentCount); err != nil {
+		t.Fatal(err)
+	}
+	if postCount != 0 || commentCount != 0 {
+		t.Fatalf("deleted account content remains: posts=%d comments=%d", postCount, commentCount)
+	}
+
+	memberToken, _ = app.createAccessToken(memberID, householdID)
+	doJSON(t, handler, http.MethodDelete, "/me/account", memberToken, nil)
+	var households int
+	if err := app.db.QueryRow(`SELECT COUNT(*) FROM households WHERE id = ?`, householdID).Scan(&households); err != nil {
+		t.Fatal(err)
+	}
+	if households != 0 {
+		t.Fatalf("sole-member household still exists")
+	}
+}
+
 func TestEmojiReactionValidation(t *testing.T) {
 	tests := []struct {
 		value string

@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ProfileView: View {
     @EnvironmentObject private var sessionStore: SessionStore
+    @State private var isDeleteConfirmationPresented = false
+    @State private var isDeleteErrorPresented = false
 
     var body: some View {
         List {
@@ -66,8 +68,46 @@ struct ProfileView: View {
                     Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
                 }
             }
+
+            Section {
+                Button(role: .destructive) {
+                    isDeleteConfirmationPresented = true
+                } label: {
+                    if sessionStore.isDeletingAccount {
+                        ProgressView()
+                    } else {
+                        Label("Delete Account", systemImage: "trash")
+                    }
+                }
+                .disabled(sessionStore.isDeletingAccount)
+
+                Text("This permanently deletes your account, posts, and comments. Households with other members will be transferred to another member.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
         }
         .navigationTitle("Profile")
+        .confirmationDialog(
+            "Delete your account?",
+            isPresented: $isDeleteConfirmationPresented,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Account", role: .destructive) {
+                Task {
+                    await sessionStore.deleteAccount()
+                    if sessionStore.accountError != nil {
+                        isDeleteErrorPresented = true
+                    }
+                }
+            }
+        } message: {
+            Text("This cannot be undone. Your posts and comments will be permanently deleted. Any household you own with other members will be transferred to another member.")
+        }
+        .alert("Unable to delete account", isPresented: $isDeleteErrorPresented) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(sessionStore.accountError ?? "Please try again.")
+        }
     }
 }
 

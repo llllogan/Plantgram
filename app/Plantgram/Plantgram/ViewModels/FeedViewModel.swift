@@ -8,6 +8,8 @@ final class FeedViewModel: ObservableObject {
     @Published private(set) var message: String?
 
     private let postService: PostService
+    private var nextCursor: String?
+    private var hasLoadedAllPages = false
 
     init(postService: PostService = .live) {
         self.postService = postService
@@ -19,15 +21,32 @@ final class FeedViewModel: ObservableObject {
             return
         }
 
+        posts = []
+        nextCursor = nil
+        hasLoadedAllPages = false
+        await loadNextPage(accessToken: accessToken)
+    }
+
+    func loadNextPage(accessToken: String?) async {
+        guard let accessToken,
+              !isLoading,
+              !hasLoadedAllPages else {
+            return
+        }
+
         isLoading = true
         defer { isLoading = false }
 
         do {
-            posts = try await postService.fetchFeed(accessToken: accessToken)
+            let response = try await postService.fetchFeed(accessToken: accessToken, cursor: nextCursor)
+            posts.append(contentsOf: response.posts)
+            nextCursor = response.nextCursor
+            hasLoadedAllPages = response.nextCursor == nil || response.posts.isEmpty
             message = nil
         } catch {
-            posts = []
-            message = error.localizedDescription
+            if posts.isEmpty {
+                message = error.localizedDescription
+            }
         }
     }
 }

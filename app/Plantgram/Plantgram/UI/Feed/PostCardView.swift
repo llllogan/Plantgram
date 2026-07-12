@@ -47,9 +47,13 @@ struct PostCardView: View {
 
                 Spacer()
                 
-                Text(post.postType.title)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Label(post.postType.title, systemImage: post.postType.systemImage)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.tint)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.accentColor.opacity(0.14), in: Capsule())
+                    .accessibilityLabel("Post type: \(post.postType.title)")
             }
             .padding(.horizontal, 16)
 
@@ -379,6 +383,8 @@ private struct CommentRow: View {
 
 #if canImport(UIKit)
 private struct AuthenticatedRemoteImage: View {
+    private static let imageCache = NSCache<NSURL, UIImage>()
+
     let url: URL
     let accessToken: String?
 
@@ -408,8 +414,14 @@ private struct AuthenticatedRemoteImage: View {
     }
 
     private func load() async {
-        image = nil
         didFail = false
+
+        if let cachedImage = Self.imageCache.object(forKey: url as NSURL) {
+            image = cachedImage
+            return
+        }
+
+        image = nil
 
         do {
             var request = URLRequest(url: url)
@@ -423,6 +435,7 @@ private struct AuthenticatedRemoteImage: View {
                 didFail = true
                 return
             }
+            Self.imageCache.setObject(loadedImage, forKey: url as NSURL)
             image = loadedImage
         } catch {
             didFail = true

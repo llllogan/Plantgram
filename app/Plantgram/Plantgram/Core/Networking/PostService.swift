@@ -1,15 +1,15 @@
 import Foundation
 
 struct PostService: Sendable {
-    var fetchFeedHandler: @Sendable (_ accessToken: String) async throws -> [FeedPost]
+    var fetchFeedHandler: @Sendable (_ accessToken: String, _ cursor: String?, _ limit: Int) async throws -> FeedResponse
     var createPostHandler: @Sendable (_ caption: String, _ postType: PostType, _ imageData: Data?, _ accessToken: String) async throws -> FeedPost
     var fetchCommentsHandler: @Sendable (_ postID: String, _ accessToken: String) async throws -> [PostComment]
     var addReactionHandler: @Sendable (_ postID: String, _ emoji: String, _ accessToken: String) async throws -> Void
     var removeReactionHandler: @Sendable (_ postID: String, _ emoji: String, _ accessToken: String) async throws -> Void
     var createCommentHandler: @Sendable (_ postID: String, _ body: String, _ accessToken: String) async throws -> PostComment
 
-    func fetchFeed(accessToken: String) async throws -> [FeedPost] {
-        try await fetchFeedHandler(accessToken)
+    func fetchFeed(accessToken: String, cursor: String? = nil, limit: Int = 30) async throws -> FeedResponse {
+        try await fetchFeedHandler(accessToken, cursor, limit)
     }
 
     func createPost(caption: String, postType: PostType, imageData: Data?, accessToken: String) async throws -> FeedPost {
@@ -33,9 +33,13 @@ struct PostService: Sendable {
     }
 
     static let live = PostService(
-        fetchFeedHandler: { accessToken in
-            let response: FeedResponse = try await APIClient.live.get("/feed", accessToken: accessToken)
-            return response.posts
+        fetchFeedHandler: { accessToken, cursor, limit in
+            var path = "/feed?limit=\(limit)"
+            if let cursor,
+               let encodedCursor = cursor.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
+                path += "&cursor=\(encodedCursor)"
+            }
+            return try await APIClient.live.get(path, accessToken: accessToken)
         },
         createPostHandler: { caption, postType, imageData, accessToken in
             var imageMediaID: String?
