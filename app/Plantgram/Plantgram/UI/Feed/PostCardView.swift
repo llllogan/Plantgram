@@ -20,6 +20,7 @@ struct PostCardView: View {
     @State private var commentText = ""
     @State private var isEmojiPickerPresented = false
     @State private var isTaggedPlantsSheetPresented = false
+    
     @State private var selectedProfileReference: ProfileReference?
     @State private var interactionError: String?
     @FocusState private var isCommentFieldFocused: Bool

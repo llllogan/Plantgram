@@ -17,17 +17,12 @@ struct AppRootView: View {
         .dismissKeyboardOnTap()
         .sheet(
             isPresented: Binding(
-                get: { sessionStore.shouldShowUsernameOnboarding || sessionStore.shouldShowHouseholdOnboarding },
+                get: { sessionStore.shouldShowOnboarding },
                 set: { _ in }
             )
         ) {
-            if sessionStore.shouldShowUsernameOnboarding {
-                UsernameOnboardingSheet()
-                    .environmentObject(sessionStore)
-            } else {
-                HouseholdOnboardingSheet()
-                    .environmentObject(sessionStore)
-            }
+            OnboardingSheet()
+                .environmentObject(sessionStore)
         }
         .task {
             await sessionStore.restore()

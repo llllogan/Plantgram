@@ -33,6 +33,7 @@ final class SessionStore: ObservableObject {
     private let authService: AuthService
     private let accountService: AccountService
     private let userDefaults: UserDefaults
+    private var pendingProfilePhotoData: Data?
 
     init(authService: AuthService = .live, accountService: AccountService = .live, userDefaults: UserDefaults = .standard) {
         self.authService = authService
@@ -58,6 +59,19 @@ final class SessionStore: ObservableObject {
 
     var shouldShowUsernameOnboarding: Bool {
         authState == .signedIn && currentUser?.displayName == "Plantgram User"
+    }
+
+    var shouldShowProfilePhotoOnboarding: Bool {
+        guard authState == .signedIn,
+              currentUser?.profileMediaId == nil,
+              let userKey = onboardingUserKey else {
+            return false
+        }
+        return !userDefaults.bool(forKey: profilePhotoOnboardingKey(for: userKey))
+    }
+
+    var shouldShowOnboarding: Bool {
+        shouldShowUsernameOnboarding || shouldShowProfilePhotoOnboarding || shouldShowHouseholdOnboarding
     }
 
     var hasActiveHousehold: Bool {
@@ -158,6 +172,7 @@ final class SessionStore: ObservableObject {
             KeychainStore.save(response.accessToken, for: .accessToken)
             self.accessToken = response.accessToken
             householdState = .active(response.household)
+            await uploadPendingProfilePhoto()
             await refreshAccountState()
         } catch {
             householdError = error.localizedDescription
@@ -186,6 +201,66 @@ final class SessionStore: ObservableObject {
         } catch {
             usernameError = error.localizedDescription
         }
+    }
+
+    func saveProfilePhoto(_ imageData: Data) async {
+        guard let accessToken, let currentUser else {
+            usernameError = "Log in again before adding a profile photo."
+            return
+        }
+
+        usernameError = nil
+
+        if !hasActiveHousehold {
+            pendingProfilePhotoData = imageData
+            completeProfilePhotoOnboarding()
+            return
+        }
+
+        await uploadProfilePhoto(imageData, accessToken: accessToken, displayName: currentUser.displayName)
+    }
+
+    private func uploadProfilePhoto(_ imageData: Data, accessToken: String, displayName: String) async {
+        isSavingUsername = true
+        defer { isSavingUsername = false }
+
+        do {
+            let upload = try await APIClient.live.uploadImage(
+                imageData,
+                fileName: "profile.jpg",
+                mimeType: "image/jpeg",
+                accessToken: accessToken
+            )
+            let response = try await accountService.updateProfile(
+                displayName: displayName,
+                profileMediaID: upload.media.id,
+                accessToken: accessToken
+            )
+            self.currentUser = response.human
+            storeCurrentUser()
+            completeProfilePhotoOnboarding()
+        } catch {
+            if error is CancellationError || (error as? URLError)?.code == .cancelled {
+                return
+            }
+            usernameError = error.localizedDescription
+        }
+    }
+
+    func skipProfilePhotoOnboarding() {
+        pendingProfilePhotoData = nil
+        guard let userKey = onboardingUserKey else { return }
+        userDefaults.set(true, forKey: profilePhotoOnboardingKey(for: userKey))
+    }
+
+    private func uploadPendingProfilePhoto() async {
+        guard let pendingProfilePhotoData,
+              let accessToken,
+              let displayName = currentUser?.displayName else {
+            return
+        }
+        self.pendingProfilePhotoData = nil
+        await uploadProfilePhoto(pendingProfilePhotoData, accessToken: accessToken, displayName: displayName)
     }
 
     func chooseJoinHousehold() {
@@ -287,6 +362,19 @@ final class SessionStore: ObservableObject {
         userDefaults.set(data, forKey: Self.userDefaultsKey)
     }
 
+    private var onboardingUserKey: String? {
+        currentUser?.id ?? currentUser?.email
+    }
+
+    private func completeProfilePhotoOnboarding() {
+        guard let userKey = onboardingUserKey else { return }
+        userDefaults.set(true, forKey: profilePhotoOnboardingKey(for: userKey))
+    }
+
+    private func profilePhotoOnboardingKey(for userKey: String) -> String {
+        "PlantgramProfilePhotoOnboardingCompleted-\(userKey)"
+    }
+
     private static let userDefaultsKey = "PlantgramCurrentUser"
 }
 
@@ -302,7 +390,7 @@ extension SessionStore {
         store.authState = .signedIn
         store.householdState = .active(Household(id: "hhd_preview", name: "Home", role: "owner", createdAt: nil))
         store.accessToken = "preview-token"
-        store.currentUser = CurrentUser(id: "hum_preview", email: "logan@example.com", displayName: "Logan")
+        store.currentUser = CurrentUser(id: "hum_preview", email: "logan@example.com", displayName: "Logan", profileMediaId: "preview")
         return store
     }
 
@@ -311,7 +399,7 @@ extension SessionStore {
         store.authState = .signedIn
         store.householdState = .needsHousehold
         store.accessToken = "preview-token"
-        store.currentUser = CurrentUser(id: "hum_preview", email: "logan@example.com", displayName: "Logan")
+        store.currentUser = CurrentUser(id: "hum_preview", email: "logan@example.com", displayName: "Logan", profileMediaId: "preview")
         return store
     }
 }

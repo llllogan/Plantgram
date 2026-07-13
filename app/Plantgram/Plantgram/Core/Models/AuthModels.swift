@@ -19,6 +19,14 @@ struct CurrentUser: Codable, Equatable {
     let id: String?
     let email: String?
     let displayName: String
+    let profileMediaId: String?
+
+    init(id: String?, email: String?, displayName: String, profileMediaId: String? = nil) {
+        self.id = id
+        self.email = email
+        self.displayName = displayName
+        self.profileMediaId = profileMediaId
+    }
 }
 
 struct MeResponse: Decodable {

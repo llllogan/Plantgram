@@ -87,6 +87,7 @@ struct ProfileView: View {
             }
         }
         .navigationTitle("Profile")
+        .toolbarTitleDisplayMode(.inlineLarge)
         .confirmationDialog(
             "Delete your account?",
             isPresented: $isDeleteConfirmationPresented,

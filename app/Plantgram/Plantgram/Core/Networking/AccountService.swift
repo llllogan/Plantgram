@@ -6,7 +6,7 @@ struct AccountService: Sendable {
     var createHouseholdHandler: @Sendable (_ name: String, _ accessToken: String) async throws -> CreateHouseholdResponse
     var setActiveHouseholdHandler: @Sendable (_ householdID: String, _ accessToken: String) async throws -> ActiveHouseholdResponse
     var deleteAccountHandler: @Sendable (_ accessToken: String) async throws -> Void
-    var updateProfileHandler: @Sendable (_ displayName: String, _ accessToken: String) async throws -> MeResponse
+    var updateProfileHandler: @Sendable (_ displayName: String, _ profileMediaID: String?, _ accessToken: String) async throws -> MeResponse
 
     func fetchMe(accessToken: String) async throws -> MeResponse {
         try await fetchMeHandler(accessToken)
@@ -28,8 +28,8 @@ struct AccountService: Sendable {
         try await deleteAccountHandler(accessToken)
     }
 
-    func updateProfile(displayName: String, accessToken: String) async throws -> MeResponse {
-        try await updateProfileHandler(displayName, accessToken)
+    func updateProfile(displayName: String, profileMediaID: String? = nil, accessToken: String) async throws -> MeResponse {
+        try await updateProfileHandler(displayName, profileMediaID, accessToken)
     }
 
     static let live = AccountService(
@@ -57,10 +57,10 @@ struct AccountService: Sendable {
         deleteAccountHandler: { accessToken in
             try await APIClient.live.delete("/me/account", accessToken: accessToken)
         },
-        updateProfileHandler: { displayName, accessToken in
+        updateProfileHandler: { displayName, profileMediaID, accessToken in
             try await APIClient.live.patch(
                 "/me",
-                body: UpdateProfileRequest(displayName: displayName, profileMediaId: nil),
+                body: UpdateProfileRequest(displayName: displayName, profileMediaId: profileMediaID),
                 accessToken: accessToken
             )
         }
@@ -69,7 +69,7 @@ struct AccountService: Sendable {
     static let preview = AccountService(
         fetchMeHandler: { _ in
             MeResponse(
-                human: CurrentUser(id: "hum_preview", email: "logan@example.com", displayName: "Logan"),
+                human: CurrentUser(id: "hum_preview", email: "logan@example.com", displayName: "Logan", profileMediaId: "preview"),
                 activeHouseholdId: "hhd_preview"
             )
         },
@@ -86,9 +86,9 @@ struct AccountService: Sendable {
             ActiveHouseholdResponse(accessToken: "preview-access", tokenType: "Bearer")
         },
         deleteAccountHandler: { _ in },
-        updateProfileHandler: { displayName, _ in
+        updateProfileHandler: { displayName, _, _ in
             MeResponse(
-                human: CurrentUser(id: "hum_preview", email: "logan@example.com", displayName: displayName),
+                human: CurrentUser(id: "hum_preview", email: "logan@example.com", displayName: displayName, profileMediaId: "preview"),
                 activeHouseholdId: nil
             )
         }

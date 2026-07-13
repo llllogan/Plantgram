@@ -40,6 +40,7 @@ struct GardenView: View {
             }
         }
         .navigationTitle("Garden")
+        .toolbarTitleDisplayMode(.inlineLarge)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
