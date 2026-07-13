@@ -64,6 +64,12 @@ final class APIClient {
         try await sendWithoutBody(request)
     }
 
+    func deleteResponse<Response: Decodable>(_ path: String, accessToken: String? = nil) async throws -> Response {
+        var request = try makeRequest(path: path, method: "DELETE", accessToken: accessToken)
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        return try await send(request)
+    }
+
     func uploadImage(_ data: Data, fileName: String, mimeType: String, accessToken: String) async throws -> MediaUploadResponse {
         let boundary = "Boundary-\(UUID().uuidString)"
         var request = try makeRequest(path: "/media", method: "POST", accessToken: accessToken)

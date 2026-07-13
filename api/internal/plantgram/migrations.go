@@ -35,6 +35,16 @@ CREATE TABLE IF NOT EXISTS household_members (
 	PRIMARY KEY (household_id, human_id)
 );
 
+CREATE TABLE IF NOT EXISTS household_invites (
+	id TEXT PRIMARY KEY,
+	household_id TEXT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+	created_by_human_id TEXT NOT NULL REFERENCES human_accounts(id) ON DELETE CASCADE,
+	token_hash TEXT NOT NULL UNIQUE,
+	expires_at TEXT NOT NULL,
+	used_at TEXT,
+	created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS actors (
 	id TEXT PRIMARY KEY,
 	household_id TEXT REFERENCES households(id) ON DELETE CASCADE,
@@ -149,6 +159,8 @@ CREATE TABLE IF NOT EXISTS post_comments (
 );
 
 CREATE INDEX IF NOT EXISTS idx_household_members_human ON household_members(human_id);
+CREATE INDEX IF NOT EXISTS idx_household_invites_household ON household_invites(household_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_household_invites_token_hash ON household_invites(token_hash);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_human_apple_user_id ON human_accounts(apple_user_id);
 CREATE INDEX IF NOT EXISTS idx_plants_household ON plant_accounts(household_id);
 CREATE INDEX IF NOT EXISTS idx_planters_household ON planters(household_id);

@@ -33,6 +33,30 @@ enum PostType: String, Codable, CaseIterable, Identifiable {
             "megaphone.fill"
         }
     }
+
+    var menuTitle: String {
+        switch self {
+        case .general:
+            "General"
+        case .wateringEvent:
+            "Water Plants"
+        case .plantingEvent:
+            "Planting"
+        case .statusUpdate:
+            "Status Update"
+        }
+    }
+
+    var taggedPlantsTitle: String {
+        switch self {
+        case .wateringEvent:
+            "Plants Watered"
+        case .plantingEvent:
+            "Plants Planted"
+        case .general, .statusUpdate:
+            "Tag Plants"
+        }
+    }
 }
 
 struct FeedResponse: Decodable {

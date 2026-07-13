@@ -16,6 +16,7 @@ struct OnboardingSheet: View {
     @State private var hasAttemptedCamera = false
     @State private var isShowingLibrary = false
     @State private var isShowingCamera = false
+    @State private var isShowingInviteScanner = false
 
     var body: some View {
         NavigationStack {
@@ -46,6 +47,19 @@ struct OnboardingSheet: View {
                     isShowingCamera = false
                     hasAttemptedCamera = true
                     if let data { setProfileImage(data) }
+                }
+                .ignoresSafeArea()
+            }
+            .sheet(isPresented: $isShowingInviteScanner) {
+                HouseholdInviteScanner { scannedValue in
+                    isShowingInviteScanner = false
+                    guard let token = HouseholdInviteScanner.token(from: scannedValue) else {
+                        sessionStore.householdError = "That QR code is not a Plantgram household invite."
+                        return
+                    }
+                    Task {
+                        _ = await sessionStore.joinHousehold(inviteToken: token)
+                    }
                 }
                 .ignoresSafeArea()
             }
@@ -209,7 +223,7 @@ struct OnboardingSheet: View {
 
                 HStack(spacing: 12) {
                     Button {
-                        sessionStore.chooseJoinHousehold()
+                        isShowingInviteScanner = true
                     } label: {
                         Label("Join", systemImage: "person.2.badge.plus")
                             .frame(maxWidth: .infinity, minHeight: 42)

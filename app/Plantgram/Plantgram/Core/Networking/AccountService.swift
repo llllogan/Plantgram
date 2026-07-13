@@ -5,6 +5,9 @@ struct AccountService: Sendable {
     var listHouseholdsHandler: @Sendable (_ accessToken: String) async throws -> [Household]
     var createHouseholdHandler: @Sendable (_ name: String, _ accessToken: String) async throws -> CreateHouseholdResponse
     var setActiveHouseholdHandler: @Sendable (_ householdID: String, _ accessToken: String) async throws -> ActiveHouseholdResponse
+    var createHouseholdInviteHandler: @Sendable (_ householdID: String, _ accessToken: String) async throws -> HouseholdInvite
+    var acceptHouseholdInviteHandler: @Sendable (_ token: String, _ accessToken: String) async throws -> ActiveHouseholdResponse
+    var leaveHouseholdHandler: @Sendable (_ accessToken: String) async throws -> ActiveHouseholdResponse
     var deleteAccountHandler: @Sendable (_ accessToken: String) async throws -> Void
     var updateProfileHandler: @Sendable (_ displayName: String, _ profileMediaID: String?, _ accessToken: String) async throws -> MeResponse
 
@@ -22,6 +25,18 @@ struct AccountService: Sendable {
 
     func setActiveHousehold(_ householdID: String, accessToken: String) async throws -> ActiveHouseholdResponse {
         try await setActiveHouseholdHandler(householdID, accessToken)
+    }
+
+    func createHouseholdInvite(householdID: String, accessToken: String) async throws -> HouseholdInvite {
+        try await createHouseholdInviteHandler(householdID, accessToken)
+    }
+
+    func acceptHouseholdInvite(token: String, accessToken: String) async throws -> ActiveHouseholdResponse {
+        try await acceptHouseholdInviteHandler(token, accessToken)
+    }
+
+    func leaveHousehold(accessToken: String) async throws -> ActiveHouseholdResponse {
+        try await leaveHouseholdHandler(accessToken)
     }
 
     func deleteAccount(accessToken: String) async throws {
@@ -51,6 +66,27 @@ struct AccountService: Sendable {
             try await APIClient.live.post(
                 "/me/active-household",
                 body: SetActiveHouseholdRequest(householdId: householdID),
+                accessToken: accessToken
+            )
+        },
+        createHouseholdInviteHandler: { householdID, accessToken in
+            let response: CreateHouseholdInviteResponse = try await APIClient.live.post(
+                "/households/\(householdID)/invites",
+                body: EmptyRequest(),
+                accessToken: accessToken
+            )
+            return response.invite
+        },
+        acceptHouseholdInviteHandler: { token, accessToken in
+            try await APIClient.live.post(
+                "/households/invites/accept",
+                body: AcceptHouseholdInviteRequest(token: token),
+                accessToken: accessToken
+            )
+        },
+        leaveHouseholdHandler: { accessToken in
+            try await APIClient.live.deleteResponse(
+                "/me/household",
                 accessToken: accessToken
             )
         },
@@ -85,6 +121,15 @@ struct AccountService: Sendable {
         setActiveHouseholdHandler: { _, _ in
             ActiveHouseholdResponse(accessToken: "preview-access", tokenType: "Bearer")
         },
+        createHouseholdInviteHandler: { _, _ in
+            HouseholdInvite(id: "invite_preview", token: "preview-token", joinURL: "plantgram://join?token=preview-token", householdName: "Home", expiresAt: "")
+        },
+        acceptHouseholdInviteHandler: { _, _ in
+            ActiveHouseholdResponse(accessToken: "preview-access", tokenType: "Bearer")
+        },
+        leaveHouseholdHandler: { _ in
+            ActiveHouseholdResponse(accessToken: "preview-access", tokenType: "Bearer")
+        },
         deleteAccountHandler: { _ in },
         updateProfileHandler: { displayName, _, _ in
             MeResponse(
@@ -94,3 +139,5 @@ struct AccountService: Sendable {
         }
     )
 }
+
+private struct EmptyRequest: Encodable {}

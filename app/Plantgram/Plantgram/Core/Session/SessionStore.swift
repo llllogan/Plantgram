@@ -263,8 +263,50 @@ final class SessionStore: ObservableObject {
         await uploadProfilePhoto(pendingProfilePhotoData, accessToken: accessToken, displayName: displayName)
     }
 
-    func chooseJoinHousehold() {
-        householdError = "Joining a household is coming soon."
+    func joinHousehold(inviteToken: String) async -> Bool {
+        guard let accessToken else {
+            householdError = "Log in again before joining a household."
+            return false
+        }
+        householdError = nil
+        do {
+            let response = try await accountService.acceptHouseholdInvite(token: inviteToken, accessToken: accessToken)
+            KeychainStore.save(response.accessToken, for: .accessToken)
+            self.accessToken = response.accessToken
+            await refreshAccountState()
+            return true
+        } catch {
+            householdError = error.localizedDescription
+            return false
+        }
+    }
+
+    func createHouseholdInvite() async -> HouseholdInvite? {
+        guard let accessToken, let household = activeHousehold else {
+            householdError = "An active household is required to create an invite."
+            return nil
+        }
+        do {
+            return try await accountService.createHouseholdInvite(householdID: household.id, accessToken: accessToken)
+        } catch {
+            householdError = error.localizedDescription
+            return nil
+        }
+    }
+
+    func leaveHousehold() async {
+        guard let accessToken else {
+            householdError = "Log in again before leaving your household."
+            return
+        }
+        do {
+            let response = try await accountService.leaveHousehold(accessToken: accessToken)
+            KeychainStore.save(response.accessToken, for: .accessToken)
+            self.accessToken = response.accessToken
+            await refreshAccountState()
+        } catch {
+            householdError = error.localizedDescription
+        }
     }
 
     func signOut() {

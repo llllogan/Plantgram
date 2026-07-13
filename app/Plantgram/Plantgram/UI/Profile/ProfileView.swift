@@ -1,22 +1,26 @@
 import SwiftUI
+import CoreImage.CIFilterBuiltins
 
 struct ProfileView: View {
     @EnvironmentObject private var sessionStore: SessionStore
     @State private var isDeleteConfirmationPresented = false
     @State private var isDeleteErrorPresented = false
+    @State private var isLeaveConfirmationPresented = false
+    @State private var isInviteSheetPresented = false
+    @State private var invite: HouseholdInvite?
+    @State private var isCreatingInvite = false
+    @State private var inviteError: String?
 
     var body: some View {
         List {
             Section {
                 HStack(spacing: 16) {
-                    Circle()
-                        .fill(.green.opacity(0.16))
-                        .frame(width: 64, height: 64)
-                        .overlay {
-                            Image(systemName: "person.fill")
-                                .font(.title2)
-                                .foregroundStyle(.green)
-                        }
+                    PlantProfileImage(
+                        mediaID: sessionStore.currentUser?.profileMediaId,
+                        accessToken: sessionStore.accessToken,
+                        size: 64,
+                        placeholderSystemImage: "person.fill"
+                    )
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(sessionStore.currentUser?.displayName ?? "Plantgram User")
@@ -47,6 +51,37 @@ struct ProfileView: View {
                                     .foregroundStyle(.secondary)
                             }
                         }
+
+                        Spacer()
+
+                        if household.role == "owner" {
+                            Button {
+                                invite = nil
+                                inviteError = nil
+                                isInviteSheetPresented = true
+                                Task {
+                                    isCreatingInvite = true
+                                    invite = await sessionStore.createHouseholdInvite()
+                                    isCreatingInvite = false
+                                    if invite == nil {
+                                        inviteError = sessionStore.householdError ?? "Unable to create a household invite."
+                                    }
+                                }
+                            } label: {
+                                if isCreatingInvite {
+                                    ProgressView()
+                                } else {
+                                    Text("Invite Someone")
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(isCreatingInvite)
+                        } else {
+                            Button("Leave Household", role: .destructive) {
+                                isLeaveConfirmationPresented = true
+                            }
+                            .buttonStyle(.bordered)
+                        }
                     }
                     .padding(.vertical, 4)
                 } else if sessionStore.householdState == .checking {
@@ -65,18 +100,16 @@ struct ProfileView: View {
                 Button(role: .destructive) {
                     sessionStore.signOut()
                 } label: {
-                    Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                    Text("Sign Out")
                 }
-            }
 
-            Section {
                 Button(role: .destructive) {
                     isDeleteConfirmationPresented = true
                 } label: {
                     if sessionStore.isDeletingAccount {
                         ProgressView()
                     } else {
-                        Label("Delete Account", systemImage: "trash")
+                        Text("Delete Account")
                     }
                 }
                 .disabled(sessionStore.isDeletingAccount)
@@ -88,6 +121,43 @@ struct ProfileView: View {
         }
         .navigationTitle("Profile")
         .toolbarTitleDisplayMode(.inlineLarge)
+        .sheet(isPresented: $isInviteSheetPresented) {
+            if let invite {
+                HouseholdInviteSheet(invite: invite)
+            } else if let inviteError {
+                VStack(spacing: 16) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.largeTitle)
+                        .foregroundStyle(.orange)
+                    Text(inviteError)
+                        .multilineTextAlignment(.center)
+                    Button("Done") {
+                        isInviteSheetPresented = false
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding(24)
+                .presentationDetents([.medium])
+            } else {
+                VStack(spacing: 16) {
+                    ProgressView()
+                    Text("Creating invite…")
+                        .foregroundStyle(.secondary)
+                }
+                .presentationDetents([.medium])
+            }
+        }
+        .confirmationDialog(
+            "Leave this household?",
+            isPresented: $isLeaveConfirmationPresented,
+            titleVisibility: .visible
+        ) {
+            Button("Leave Household", role: .destructive) {
+                Task { await sessionStore.leaveHousehold() }
+            }
+        } message: {
+            Text("You will no longer see this household's plants and posts. Your account will not be deleted.")
+        }
         .confirmationDialog(
             "Delete your account?",
             isPresented: $isDeleteConfirmationPresented,
@@ -109,6 +179,63 @@ struct ProfileView: View {
         } message: {
             Text(sessionStore.accountError ?? "Please try again.")
         }
+    }
+}
+
+private struct HouseholdInviteSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let invite: HouseholdInvite
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                Text("Invite someone to \(invite.householdName)")
+                    .font(.title2.weight(.semibold))
+                    .multilineTextAlignment(.center)
+
+                if let image = qrImage {
+                    image
+                        .interpolation(.none)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: 280, maxHeight: 280)
+                        .padding(24)
+                        .background(.white, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                }
+
+                Text("Ask the other person to scan this code from the Join Household option during onboarding.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+
+                Spacer()
+            }
+            .padding(24)
+            .navigationTitle("Household Invite")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private var qrImage: Image? {
+        guard let data = invite.joinURL.data(using: .utf8) else { return nil }
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = data
+        filter.correctionLevel = "M"
+        guard let output = filter.outputImage else { return nil }
+        let scaled = output.transformed(by: CGAffineTransform(scaleX: 10, y: 10))
+        #if canImport(UIKit)
+        return Image(uiImage: UIImage(ciImage: scaled))
+        #else
+        return nil
+        #endif
     }
 }
 

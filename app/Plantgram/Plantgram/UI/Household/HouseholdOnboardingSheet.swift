@@ -4,6 +4,7 @@ struct HouseholdOnboardingSheet: View {
     @EnvironmentObject private var sessionStore: SessionStore
     @State private var isCreating = false
     @State private var householdName = ""
+    @State private var isShowingInviteScanner = false
 
     var body: some View {
         NavigationStack {
@@ -87,7 +88,7 @@ struct HouseholdOnboardingSheet: View {
                     } else {
                         HStack(spacing: 12) {
                             Button {
-                                sessionStore.chooseJoinHousehold()
+                                isShowingInviteScanner = true
                             } label: {
                                 Label("Join", systemImage: "person.2.badge.plus")
                                     .frame(maxWidth: .infinity, minHeight: 38)
@@ -114,6 +115,19 @@ struct HouseholdOnboardingSheet: View {
         .presentationDetents([.medium])
         .presentationDragIndicator(.hidden)
         .interactiveDismissDisabled()
+        .sheet(isPresented: $isShowingInviteScanner) {
+            HouseholdInviteScanner { scannedValue in
+                isShowingInviteScanner = false
+                guard let token = HouseholdInviteScanner.token(from: scannedValue) else {
+                    sessionStore.householdError = "That QR code is not a Plantgram household invite."
+                    return
+                }
+                Task {
+                    _ = await sessionStore.joinHousehold(inviteToken: token)
+                }
+            }
+            .ignoresSafeArea()
+        }
     }
 
     private func createHousehold() {

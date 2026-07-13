@@ -114,7 +114,10 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("POST /households", a.requireAuth(a.handleCreateHousehold, false))
 	mux.HandleFunc("GET /households", a.requireAuth(a.handleListHouseholds, false))
 	mux.HandleFunc("POST /households/{id}/join", a.requireAuth(a.handleJoinHousehold, false))
+	mux.HandleFunc("POST /households/{id}/invites", a.requireAuth(a.handleCreateHouseholdInvite, true))
+	mux.HandleFunc("POST /households/invites/accept", a.requireAuth(a.handleAcceptHouseholdInvite, false))
 	mux.HandleFunc("POST /me/active-household", a.requireAuth(a.handleSetActiveHousehold, false))
+	mux.HandleFunc("DELETE /me/household", a.requireAuth(a.handleLeaveHousehold, true))
 
 	mux.HandleFunc("POST /plants", a.requireAuth(a.handleCreatePlant, true))
 	mux.HandleFunc("GET /plants", a.requireAuth(a.handleListPlants, true))
@@ -536,6 +539,123 @@ func (a *App) handleJoinHousehold(w http.ResponseWriter, r *http.Request) {
 	}
 	access, _ := a.createAccessToken(ac.HumanID, householdID)
 	writeJSON(w, http.StatusOK, map[string]any{"household_id": householdID, "access_token": access})
+}
+
+func (a *App) handleCreateHouseholdInvite(w http.ResponseWriter, r *http.Request) {
+	ac := authFrom(r)
+	householdID := r.PathValue("id")
+	var role string
+	if err := a.db.QueryRowContext(r.Context(), `SELECT role FROM household_members WHERE household_id = ? AND human_id = ?`, householdID, ac.HumanID).Scan(&role); err != nil {
+		writeError(w, http.StatusForbidden, "not a household member")
+		return
+	}
+	if role != "owner" {
+		writeError(w, http.StatusForbidden, "only the household owner can invite someone")
+		return
+	}
+	var householdName string
+	if err := a.db.QueryRowContext(r.Context(), `SELECT name FROM households WHERE id = ?`, householdID).Scan(&householdName); err != nil {
+		writeError(w, http.StatusNotFound, "household not found")
+		return
+	}
+
+	plainToken := randomToken(32)
+	now := time.Now().UTC()
+	expiresAt := now.Add(7 * 24 * time.Hour).Format(time.RFC3339Nano)
+	inviteID := newID("hinv")
+	if _, err := a.db.ExecContext(r.Context(), `INSERT INTO household_invites (id, household_id, created_by_human_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)`, inviteID, householdID, ac.HumanID, hashOpaqueToken(plainToken), expiresAt, now.Format(time.RFC3339Nano)); err != nil {
+		writeError(w, http.StatusInternalServerError, "create household invite failed")
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"invite": map[string]string{
+			"id":             inviteID,
+			"token":          plainToken,
+			"join_url":       "plantgram://join?token=" + url.QueryEscape(plainToken),
+			"household_name": householdName,
+			"expires_at":     expiresAt,
+		},
+	})
+}
+
+func (a *App) handleAcceptHouseholdInvite(w http.ResponseWriter, r *http.Request) {
+	ac := authFrom(r)
+	var req struct {
+		Token string `json:"token"`
+	}
+	if !readJSON(w, r, &req) {
+		return
+	}
+	req.Token = strings.TrimSpace(req.Token)
+	if req.Token == "" {
+		writeError(w, http.StatusBadRequest, "invite token is required")
+		return
+	}
+
+	var inviteID, householdID, expiresAt, usedAt string
+	err := a.db.QueryRowContext(r.Context(), `SELECT id, household_id, expires_at, COALESCE(used_at, '') FROM household_invites WHERE token_hash = ?`, hashOpaqueToken(req.Token)).Scan(&inviteID, &householdID, &expiresAt, &usedAt)
+	if err == sql.ErrNoRows {
+		writeError(w, http.StatusNotFound, "household invite not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "find household invite failed")
+		return
+	}
+	if usedAt != "" {
+		writeError(w, http.StatusGone, "household invite has already been used")
+		return
+	}
+	parsedExpiry, err := time.Parse(time.RFC3339Nano, expiresAt)
+	if err != nil || !parsedExpiry.After(time.Now().UTC()) {
+		writeError(w, http.StatusGone, "household invite has expired")
+		return
+	}
+
+	tx, err := a.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "join household failed")
+		return
+	}
+	defer tx.Rollback()
+	now := nowString()
+	if _, err = tx.ExecContext(r.Context(), `INSERT OR IGNORE INTO household_members (household_id, human_id, role, joined_at) VALUES (?, ?, 'member', ?)`, householdID, ac.HumanID, now); err != nil {
+		writeError(w, http.StatusInternalServerError, "join household failed")
+		return
+	}
+	if _, err = tx.ExecContext(r.Context(), `INSERT OR IGNORE INTO actors (id, household_id, actor_type, human_id, display_name, created_at) SELECT ?, ?, 'human', id, display_name, ? FROM human_accounts WHERE id = ?`, newID("act"), householdID, now, ac.HumanID); err != nil {
+		writeError(w, http.StatusInternalServerError, "create actor failed")
+		return
+	}
+	if _, err = tx.ExecContext(r.Context(), `UPDATE household_invites SET used_at = ? WHERE id = ? AND used_at IS NULL`, now, inviteID); err != nil {
+		writeError(w, http.StatusInternalServerError, "complete household invite failed")
+		return
+	}
+	if err = tx.Commit(); err != nil {
+		writeError(w, http.StatusInternalServerError, "join household failed")
+		return
+	}
+	access, _ := a.createAccessToken(ac.HumanID, householdID)
+	writeJSON(w, http.StatusOK, map[string]any{"household_id": householdID, "access_token": access, "token_type": "Bearer"})
+}
+
+func (a *App) handleLeaveHousehold(w http.ResponseWriter, r *http.Request) {
+	ac := authFrom(r)
+	var role string
+	if err := a.db.QueryRowContext(r.Context(), `SELECT role FROM household_members WHERE household_id = ? AND human_id = ?`, ac.HouseholdID, ac.HumanID).Scan(&role); err != nil {
+		writeError(w, http.StatusNotFound, "household membership not found")
+		return
+	}
+	if role == "owner" {
+		writeError(w, http.StatusForbidden, "household owners cannot leave their household")
+		return
+	}
+	if _, err := a.db.ExecContext(r.Context(), `DELETE FROM household_members WHERE household_id = ? AND human_id = ?`, ac.HouseholdID, ac.HumanID); err != nil {
+		writeError(w, http.StatusInternalServerError, "leave household failed")
+		return
+	}
+	access, _ := a.createAccessToken(ac.HumanID, "")
+	writeJSON(w, http.StatusOK, map[string]any{"access_token": access, "token_type": "Bearer"})
 }
 
 func (a *App) handleSetActiveHousehold(w http.ResponseWriter, r *http.Request) {

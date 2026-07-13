@@ -42,6 +42,27 @@ func TestCorePlantgramFlow(t *testing.T) {
 	})
 	token = household["access_token"].(string)
 
+	inviteResponse := doJSON(t, handler, http.MethodPost, "/households/"+household["household"].(map[string]any)["id"].(string)+"/invites", token, map[string]any{})
+	invite := inviteResponse["invite"].(map[string]any)
+	memberID, err := app.findOrCreateAppleHuman(t.Context(), "apple-member", "member@example.com", "Member")
+	if err != nil {
+		t.Fatalf("findOrCreateAppleHuman member: %v", err)
+	}
+	memberToken, err := app.createAccessToken(memberID, "")
+	if err != nil {
+		t.Fatalf("create member token: %v", err)
+	}
+	joined := doJSON(t, handler, http.MethodPost, "/households/invites/accept", memberToken, map[string]any{"token": invite["token"]})
+	memberToken = joined["access_token"].(string)
+	var memberRole string
+	if err := app.db.QueryRow(`SELECT role FROM household_members WHERE household_id = ? AND human_id = ?`, household["household"].(map[string]any)["id"], memberID).Scan(&memberRole); err != nil {
+		t.Fatalf("read invited membership: %v", err)
+	}
+	if memberRole != "member" {
+		t.Fatalf("invited role = %q", memberRole)
+	}
+	doJSON(t, handler, http.MethodDelete, "/me/household", memberToken, nil)
+
 	plantResp := doJSON(t, handler, http.MethodPost, "/plants", token, map[string]any{
 		"name":    "Monstera",
 		"species": "Monstera deliciosa",

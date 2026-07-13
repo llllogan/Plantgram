@@ -81,6 +81,22 @@ struct ActiveHouseholdResponse: Decodable {
     let tokenType: String
 }
 
+struct HouseholdInvite: Decodable, Identifiable {
+    let id: String
+    let token: String
+    let joinURL: String
+    let householdName: String
+    let expiresAt: String
+}
+
+struct CreateHouseholdInviteResponse: Decodable {
+    let invite: HouseholdInvite
+}
+
+struct AcceptHouseholdInviteRequest: Encodable {
+    let token: String
+}
+
 struct RefreshTokenRequest: Encodable {
     let refreshToken: String
     let householdId: String?

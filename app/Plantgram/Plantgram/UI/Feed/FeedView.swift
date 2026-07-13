@@ -49,7 +49,7 @@ struct FeedView: View {
                 }
             }
         }
-        .navigationTitle("Feed")
+        .navigationTitle(sessionStore.activeHousehold?.name ?? "Feed")
         .toolbarTitleDisplayMode(.inlineLarge)
         .task(id: "\(sessionStore.accessToken ?? "")-\(sessionStore.activeHousehold?.id ?? "none")-\(refreshID)") {
             if sessionStore.hasActiveHousehold {

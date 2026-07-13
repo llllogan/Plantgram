@@ -34,7 +34,7 @@ struct CreatePostView: View {
                     .padding(.vertical, 8)
                 }
 
-                Section("Tag Plants") {
+                Section(viewModel.postType.taggedPlantsTitle) {
                     if let plantLoadingError {
                         Text(plantLoadingError)
                             .font(.footnote)

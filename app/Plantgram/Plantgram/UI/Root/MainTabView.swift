@@ -32,16 +32,6 @@ struct MainTabView: View {
 
             NavigationStack {
                 ProfileView()
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Menu {
-                                postTypeMenu(includePlanting: true)
-                            } label: {
-                                Image(systemName: "plus")
-                            }
-                            .accessibilityLabel("Choose post type")
-                        }
-                    }
             }
             .tabItem {
                 Label("Profile", systemImage: "person.crop.circle")
@@ -56,11 +46,13 @@ struct MainTabView: View {
 
     @ViewBuilder
     private func postTypeMenu(includePlanting: Bool) -> some View {
-        ForEach(PostType.allCases.filter { includePlanting || $0 != .plantingEvent }) { type in
+        ForEach(PostType.allCases.filter { type in
+            type != .general && (includePlanting || type != .plantingEvent)
+        }) { type in
             Button {
                 selectedPostType = type
             } label: {
-                Label(type.title, systemImage: type.systemImage)
+                Label(type.menuTitle, systemImage: type.systemImage)
             }
         }
     }
