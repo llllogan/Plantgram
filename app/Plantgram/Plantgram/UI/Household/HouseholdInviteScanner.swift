@@ -8,14 +8,16 @@ struct HouseholdInviteScanner: View {
     var body: some View {
         NavigationStack {
             QRScannerView(onCode: onCode)
+                .ignoresSafeArea(.all)
                 .navigationTitle("Join Household")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Done") { dismiss() }
                     }
-                }
+            }
         }
+        .ignoresSafeArea(.all)
         .presentationDetents([.large])
     }
 
@@ -59,26 +61,48 @@ private struct QRScannerView: UIViewControllerRepresentable {
 private final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsDelegate {
     var onCode: ((String) -> Void)?
     private let session = AVCaptureSession()
+    private let sessionQueue = DispatchQueue(label: "plantgram.household-invite-camera")
     private var previewLayer: AVCaptureVideoPreviewLayer?
     private var hasScanned = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
-        guard let device = AVCaptureDevice.default(for: .video),
-              let input = try? AVCaptureDeviceInput(device: device),
-              session.canAddInput(input) else { return }
-        session.addInput(input)
-        let output = AVCaptureMetadataOutput()
-        guard session.canAddOutput(output) else { return }
-        session.addOutput(output)
-        output.setMetadataObjectsDelegate(self, queue: .main)
-        output.metadataObjectTypes = [.qr]
         let layer = AVCaptureVideoPreviewLayer(session: session)
         layer.videoGravity = .resizeAspectFill
         view.layer.addSublayer(layer)
         previewLayer = layer
+        sessionQueue.async { [weak self] in
+            self?.configureAndStartSession()
+        }
+    }
+
+    private func configureAndStartSession() {
+        guard let device = AVCaptureDevice.default(for: .video),
+              let input = try? AVCaptureDeviceInput(device: device),
+              session.canAddInput(input) else { return }
+
+        session.beginConfiguration()
+        session.addInput(input)
+
+        let output = AVCaptureMetadataOutput()
+        guard session.canAddOutput(output) else {
+            session.commitConfiguration()
+            return
+        }
+        session.addOutput(output)
+        output.setMetadataObjectsDelegate(self, queue: .main)
+        output.metadataObjectTypes = [.qr]
+        session.commitConfiguration()
         session.startRunning()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        sessionQueue.async { [weak self] in
+            guard let self, self.session.isRunning else { return }
+            self.session.stopRunning()
+        }
     }
 
     override func viewDidLayoutSubviews() {
@@ -90,7 +114,9 @@ private final class ScannerViewController: UIViewController, AVCaptureMetadataOu
         guard !hasScanned,
               let value = (metadataObjects.first as? AVMetadataMachineReadableCodeObject)?.stringValue else { return }
         hasScanned = true
-        session.stopRunning()
+        sessionQueue.async { [weak self] in
+            self?.session.stopRunning()
+        }
         onCode?(value)
     }
 }

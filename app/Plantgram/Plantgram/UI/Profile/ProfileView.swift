@@ -1,5 +1,8 @@
 import SwiftUI
 import CoreImage.CIFilterBuiltins
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct ProfileView: View {
     @EnvironmentObject private var sessionStore: SessionStore
@@ -71,13 +74,13 @@ struct ProfileView: View {
                                 if isCreatingInvite {
                                     ProgressView()
                                 } else {
-                                    Text("Invite Someone")
+                                    Text("Invite")
                                 }
                             }
                             .buttonStyle(.borderedProminent)
                             .disabled(isCreatingInvite)
                         } else {
-                            Button("Leave Household", role: .destructive) {
+                            Button("Leave", role: .destructive) {
                                 isLeaveConfirmationPresented = true
                             }
                             .buttonStyle(.bordered)
@@ -121,7 +124,7 @@ struct ProfileView: View {
         }
         .navigationTitle("Profile")
         .toolbarTitleDisplayMode(.inlineLarge)
-        .sheet(isPresented: $isInviteSheetPresented) {
+        .fullScreenCover(isPresented: $isInviteSheetPresented) {
             if let invite {
                 HouseholdInviteSheet(invite: invite)
             } else if let inviteError {
@@ -137,14 +140,12 @@ struct ProfileView: View {
                     .buttonStyle(.borderedProminent)
                 }
                 .padding(24)
-                .presentationDetents([.medium])
             } else {
                 VStack(spacing: 16) {
                     ProgressView()
                     Text("Creating invite…")
                         .foregroundStyle(.secondary)
                 }
-                .presentationDetents([.medium])
             }
         }
         .confirmationDialog(
@@ -201,6 +202,9 @@ private struct HouseholdInviteSheet: View {
                         .frame(maxWidth: 280, maxHeight: 280)
                         .padding(24)
                         .background(.white, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                } else {
+                    Text("Unable to generate the invite QR code.")
+                        .foregroundStyle(.secondary)
                 }
 
                 Text("Ask the other person to scan this code from the Join Household option during onboarding.")
@@ -220,8 +224,6 @@ private struct HouseholdInviteSheet: View {
                 }
             }
         }
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
     }
 
     private var qrImage: Image? {
@@ -230,9 +232,11 @@ private struct HouseholdInviteSheet: View {
         filter.message = data
         filter.correctionLevel = "M"
         guard let output = filter.outputImage else { return nil }
-        let scaled = output.transformed(by: CGAffineTransform(scaleX: 10, y: 10))
+        let scaled = output.transformed(by: CGAffineTransform(scaleX: 12, y: 12))
         #if canImport(UIKit)
-        return Image(uiImage: UIImage(ciImage: scaled))
+        let context = CIContext()
+        guard let cgImage = context.createCGImage(scaled, from: scaled.extent) else { return nil }
+        return Image(uiImage: UIImage(cgImage: cgImage))
         #else
         return nil
         #endif

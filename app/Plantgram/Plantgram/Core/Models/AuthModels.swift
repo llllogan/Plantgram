@@ -87,10 +87,64 @@ struct HouseholdInvite: Decodable, Identifiable {
     let joinURL: String
     let householdName: String
     let expiresAt: String
+
+    private enum CodingKeys: String, CodingKey {
+        case id, token, joinURL, householdName, expiresAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let decodedURL = try container.decodeIfPresent(String.self, forKey: .joinURL)
+        let decodedToken = try container.decodeIfPresent(String.self, forKey: .token)
+        let token = decodedToken ?? Self.token(from: decodedURL)
+
+        guard let token, !token.isEmpty else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .token,
+                in: container,
+                debugDescription: "Household invite is missing its token."
+            )
+        }
+
+        self.id = try container.decodeIfPresent(String.self, forKey: .id) ?? token
+        self.token = token
+        self.joinURL = decodedURL ?? "plantgram://join?token=\(token)"
+        self.householdName = try container.decodeIfPresent(String.self, forKey: .householdName) ?? "Household"
+        self.expiresAt = try container.decodeIfPresent(String.self, forKey: .expiresAt) ?? ""
+    }
+
+    init(id: String, token: String, joinURL: String, householdName: String, expiresAt: String) {
+        self.id = id
+        self.token = token
+        self.joinURL = joinURL
+        self.householdName = householdName
+        self.expiresAt = expiresAt
+    }
+
+    private static func token(from joinURL: String?) -> String? {
+        guard let joinURL, let url = URL(string: joinURL),
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return nil
+        }
+        return components.queryItems?.first(where: { $0.name == "token" })?.value
+    }
 }
 
 struct CreateHouseholdInviteResponse: Decodable {
     let invite: HouseholdInvite
+
+    private enum CodingKeys: String, CodingKey {
+        case invite
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let invite = try container.decodeIfPresent(HouseholdInvite.self, forKey: .invite) {
+            self.invite = invite
+        } else {
+            self.invite = try HouseholdInvite(from: decoder)
+        }
+    }
 }
 
 struct AcceptHouseholdInviteRequest: Encodable {
